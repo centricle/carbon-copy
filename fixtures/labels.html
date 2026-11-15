@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Magnet Field Technician - ACME Corporation</title>
+  <meta property="og:site_name" content="ACME Corporation">
+  <link rel="stylesheet" href="fixtures.css">
+</head>
+<body>
+  <h1>Magnet Field Technician</h1>
+  <p>One field per label pattern, in resolution order. Each value names the
+  label the record should show for it.</p>
+
+  <form action="/submit" method="post">
+    <!-- 1. label[for] -->
+    <label for="p1">Label for</label>
+    <input id="p1" name="p1">
+
+    <!-- 2. wrapping label, with a select inside whose options must not leak -->
+    <label>Wrapping label
+      <select name="p2"><option value="">Pick</option><option value="a">Option A</option></select>
+    </label>
+
+    <!-- 3. aria-labelledby (two ids) -->
+    <span id="lb1">Labeled</span> <span id="lb2">by</span>
+    <input name="p3" aria-labelledby="lb1 lb2">
+
+    <!-- 4. aria-label -->
+    <input name="p4" aria-label="Aria label">
+
+    <!-- 5. fieldset legend, for a radio group -->
+    <fieldset>
+      <legend>Legend group</legend>
+      <label><input type="radio" name="p5" value="north"> North pole</label>
+      <label><input type="radio" name="p5" value="south"> South pole</label>
+    </fieldset>
+
+    <!-- 6. question-container text (Lever's markup) -->
+    <ul>
+      <li class="application-question">
+        <div class="application-label"><div class="text">Container question<span class="required">*</span></div></div>
+        <div class="application-field"><textarea name="cards[q6]"></textarea></div>
+      </li>
+    </ul>
+
+    <!-- 6b. Greenhouse classic: a <label> with no for=, then the control -->
+    <div class="field">
+      <label>Label without for</label>
+      <select name="p6b"><option value="">--</option><option value="1">Yes</option><option value="0">No</option></select>
+    </div>
+
+    <!-- 7. placeholder only -->
+    <input name="p7" placeholder="Placeholder only">
+
+    <!-- 8. name only -->
+    <input name="name_only">
+
+    <!-- Required markers are stripped -->
+    <label for="p9">Starred *</label>
+    <input id="p9" name="p9">
+
+    <button type="submit">Submit</button>
+  </form>
+</body>
+</html>

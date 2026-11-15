@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Rocket Skate Calibrator - ACME Corporation</title>
+  <meta property="og:site_name" content="ACME Corporation">
+  <link rel="stylesheet" href="fixtures.css">
+</head>
+<body>
+  <h1>Rocket Skate Calibrator</h1>
+  <p>No &lt;form&gt;. The Submit button’s own handler wipes the DOM before it
+  sends a fetch, the way an SPA swaps in a spinner.</p>
+
+  <div id="app">
+    <div class="fields">
+      <label for="name">Full name</label>
+      <input id="name">
+      <label for="rate">Hourly rate (USD)</label>
+      <input id="rate" inputmode="decimal">
+      <label for="pitch">Tell us about a calibration you are proud of</label>
+      <textarea id="pitch"></textarea>
+    </div>
+    <button id="go" type="button">Submit</button>
+  </div>
+
+  <script>
+    document.getElementById('go').addEventListener('click', () => {
+      const body = JSON.stringify({
+        name: document.getElementById('name').value,
+        rate: document.getElementById('rate').value,
+        pitch: document.getElementById('pitch').value,
+      });
+      document.getElementById('app').innerHTML = '<p>Submitting...</p>';
+      fetch('/api/apply', { method: 'POST', headers: { 'content-type': 'application/json' }, body })
+        .then(() => { document.getElementById('app').innerHTML = '<p id="done">Thanks! We will be in touch.</p>'; });
+    });
+  </script>
+</body>
+</html>

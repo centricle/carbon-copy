@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Portable Hole Installer - ACME Corporation</title>
+  <meta property="og:site_name" content="ACME Corporation">
+  <link rel="stylesheet" href="fixtures.css">
+</head>
+<body>
+  <h1>Portable Hole Installer</h1>
+  <p>The worst-case event order for a React-style form: the submit button’s
+  click handler empties every field <em>before</em> the browser fires the
+  submit event. Only a snapshot taken at the click sees the answers.</p>
+
+  <form id="f">
+    <label for="name">Full name</label>
+    <input id="name" name="name">
+    <label for="depth">Deepest hole installed (feet)</label>
+    <input id="depth" name="depth">
+    <label for="story">Describe a hole that went wrong</label>
+    <textarea id="story" name="story"></textarea>
+    <button type="submit" id="go">Apply</button>
+  </form>
+  <p id="status"></p>
+
+  <script>
+    const form = document.getElementById('f');
+    let payload = null;
+    document.getElementById('go').addEventListener('click', () => {
+      payload = Object.fromEntries(new FormData(form));
+      form.reset(); // state cleared synchronously, as a controlled form re-renders
+    });
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      fetch('/api/apply', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) })
+        .then(() => { document.getElementById('status').textContent = 'Received.'; });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Earthquake Pill Tester - ACME Corporation</title>
+  <meta property="og:site_name" content="ACME Corporation">
+  <link rel="stylesheet" href="fixtures.css">
+</head>
+<body>
+  <h1>Earthquake Pill Tester</h1>
+  <p>Three steps, each one replacing the last in the DOM, the way Workday
+  does. The final Submit sends everything with fetch.</p>
+
+  <div id="wizard" class="step"></div>
+  <p id="status"></p>
+
+  <script>
+    const answers = {};
+    const steps = [
+      { title: 'Step 1: You', fields: [['legal_name', 'Legal name'], ['contact_email', 'Contact email']] },
+      { title: 'Step 2: Experience', fields: [['quakes', 'Earthquakes survived'], ['note', 'Anything else we should know']] },
+      { title: 'Step 3: Terms', fields: [['day_rate', 'Day rate (USD)'], ['available', 'Available from']] },
+    ];
+    let i = 0;
+    function render() {
+      const s = steps[i];
+      const last = i === steps.length - 1;
+      document.getElementById('wizard').innerHTML = `<h2>${s.title}</h2>` +
+        s.fields.map(([id, label]) => `<label for="${id}">${label}</label><input id="${id}">`).join('') +
+        `<button type="button" id="${last ? 'submit' : 'next'}">${last ? 'Submit' : 'Next'}</button>`;
+    }
+    document.getElementById('wizard').addEventListener('click', e => {
+      if (!(e.target instanceof HTMLButtonElement)) return;
+      for (const [id] of steps[i].fields) answers[id] = document.getElementById(id).value;
+      if (e.target.id === 'next') { i += 1; render(); return; }
+      document.getElementById('wizard').innerHTML = '<p>Sending...</p>';
+      fetch('/api/apply', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(answers) })
+        .then(() => { document.getElementById('status').textContent = 'Application received.'; });
+    });
+    render();
+  </script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Careers - ACME Corporation</title>
+  <link rel="stylesheet" href="fixtures.css">
+</head>
+<body>
+  <h1>Careers at ACME</h1>
+  <p>The employer’s page embeds the application form from a second origin,
+  the way a Greenhouse embed does. This page is served from localhost; the
+  form inside the frame comes from 127.0.0.1.</p>
+  <iframe id="embed" title="Application" style="width:100%;height:520px;border:1px solid #ccc"></iframe>
+  <script>
+    document.getElementById('embed').src = `http://127.0.0.1:${location.port}/fixtures/embedded-form.html`;
+  </script>
+</body>
+</html>
