@@ -518,7 +518,12 @@
     draftTimer = setTimeout(sendDraft, DRAFT_DELAY_MS);
   }
 
+  // Only a real drop. A page can build a DataTransfer holding any File it
+  // likes, and the record would then claim you sent it. (A file *input*'s
+  // change event is not held to this: autofill extensions attach resumes
+  // with a synthetic one, and collect() reads input.files directly anyway.)
   function onDrop(e) {
+    if (!e.isTrusted) return;
     const files = e.dataTransfer?.files;
     if (!files || !files.length || !(e.target instanceof Element)) return;
     if (e.target.matches('input[type="file"]')) return; // its change event covers it
@@ -553,6 +558,9 @@
       if (draftTimer) sendDraft();
       return;
     }
+    // A script calling .click() on Submit is not you submitting. If it
+    // really submits a form, the submit event that follows still counts.
+    if (!e.isTrusted) return;
     const form = (ctl.type === 'submit' && ctl.form) || null;
     startPending(form || ctl.closest('form') || fieldScope(ctl), form, 'click');
   }
@@ -588,7 +596,9 @@
     }
     if (pending && Date.now() - pending.at < 1500) return; // already resolved by the click path
     // Submitted without a click on a submit button: Enter in a lone field,
-    // or form.requestSubmit() from a script.
+    // or form.requestSubmit() from a script. Both are trusted events. A
+    // dispatched `new Event('submit')` is not, and submits nothing.
+    if (!e.isTrusted) return;
     const snap = collect(form);
     if (isEmpty(snap)) return;
     clearTimeout(draftTimer);

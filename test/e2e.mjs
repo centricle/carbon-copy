@@ -14,6 +14,7 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { serve } from './serve.mjs';
 import { buildTestExtension } from './test-extension.mjs';
+import { SUBMIT_INTERVAL_MS } from '../src/lib/throttle.js';
 
 const args = process.argv.slice(2);
 const HEADED = args.includes('--headed');
@@ -279,8 +280,12 @@ const cases = {
     const first = await submittedFor('spa-upload');
     assert.deepEqual(first.files.map(f => [f.label, f.name, f.sha256]), [['Resume', 'wile-e-coyote-resume.pdf', RESUME_SHA]]);
 
+    const t0 = Date.now();
     await page.click('#more');
     await page.fill('#name', 'Wile E. Coyote, Genius');
+    // A person takes longer than the submit gate's interval to fill in a
+    // second application; this test does not, so it waits the gap out.
+    await page.waitForTimeout(Math.max(0, SUBMIT_INTERVAL_MS - (Date.now() - t0)));
     await page.click('#go');
     await page.waitForSelector('#done');
     const second = await waitFor(
@@ -313,6 +318,29 @@ const cases = {
     const blob = JSON.stringify(rec);
     for (const name of ['ssn-card-scan', 'disability-letter', 'dd-214']) assert.ok(!blob.includes(name), `${name} recorded`);
     assert.deepEqual(rec.redacted, { secret: 1, eeo: 1 });
+    await assertOnDisk(rec);
+  },
+
+  // Page scripts that try to make records nobody submitted: a forged drop,
+  // a scripted click on Send, a synthetic submit event, then a
+  // requestSubmit() loop (trusted events, so only the SW gate stops it).
+  async 'flood'(page) {
+    const ours = async () => (await records()).filter(r => r.page.url.includes('flood.html'));
+    const onDisk = async () => (await readdir(join(downloads, 'carbon-copy'))).filter(n => n.includes('desert-signage-painter'));
+    await page.goto(`${base}/fixtures/flood.html`);
+    await page.fill('#name', 'Wile E. Coyote');
+    await page.fill('#note', 'Is the Road Runner in?');
+    await page.evaluate(() => { forgeDrop(); forgeClick(); forgeSubmitEvent(); });
+    await page.waitForTimeout(2500);
+    assert.deepEqual((await ours()).filter(r => r.status === 'submitted').map(r => r.trigger), [], 'a scripted click or submit event made a submission');
+
+    await page.evaluate(() => flood(10));
+    const rec = await submittedFor('flood.html');
+    await page.waitForTimeout(1500);
+    const all = await ours();
+    assert.equal(all.filter(r => r.status === 'submitted').length, 1, `submissions: ${all.map(r => r.status).join(', ')}`);
+    assert.ok(!JSON.stringify(all).includes('forged-portfolio'), 'forged drop recorded');
+    assert.equal((await onDisk()).length, 2, 'files on disk from the flood');
     await assertOnDisk(rec);
   },
 

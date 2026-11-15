@@ -5,6 +5,7 @@ import { buildRecord, mergeSteps, STATUS } from '../lib/record.js';
 import * as store from '../lib/store.js';
 import { writeRecord, writeExport } from '../lib/sink-downloads.js';
 import { isCovered } from '../lib/coverage.js';
+import { createSubmitGate, fingerprint } from '../lib/throttle.js';
 
 // If the page vanishes mid-submit (a native form navigating away), the
 // content script never gets to say whether the submit went through. Leaving
@@ -50,9 +51,19 @@ async function upsert(key, snapshot, status, trigger) {
   return record;
 }
 
+// In memory: a service worker restart forgets it, which only ever lets one
+// more submission through.
+const submitGate = createSubmitGate();
+const gateKey = key => String(key).split('|').slice(0, 2).join('|'); // tab|origin
+
 async function markSubmitted(recordId, trigger, key) {
   const record = await store.get(recordId);
   if (!record) return null;
+  const refused = submitGate(gateKey(key), await fingerprint(record));
+  if (refused) {
+    console.info(`[carbon-copy] kept as a draft (${refused}): ${record.page.origin}`);
+    return record;
+  }
   record.status = STATUS.SUBMITTED;
   record.trigger = trigger;
   await store.put(record);

@@ -8,6 +8,7 @@ import { MATCHES, extractContext, matchesPattern, isPresetUrl } from '../src/pre
 import { renderMarkdown, heading } from '../src/lib/render-md.js';
 import { basename, slug, landedWhereAsked } from '../src/lib/sink-downloads.js';
 import { mergeSteps, isSafelySaved } from '../src/lib/record.js';
+import { createSubmitGate, fingerprint } from '../src/lib/throttle.js';
 import { isCovered } from '../src/lib/coverage.js';
 
 const manifest = JSON.parse(await readFile(new URL('../manifest.json', import.meta.url), 'utf8'));
@@ -117,6 +118,23 @@ test('isCovered: manifest matches, granted sites, nothing else', async () => {
   assert.ok(!(await isCovered('chrome-extension://abc/popup/popup.html', MATCHES, async () => true)));
   assert.ok(!(await isCovered('about:blank', MATCHES, async () => true)));
   assert.ok(!(await isCovered(undefined, MATCHES, async () => true)));
+});
+
+test('submit gate: one per tab and site per interval, no repeats', async () => {
+  let t = 0;
+  const gate = createSubmitGate({ interval: 5000, duplicateWindow: 600000, now: () => t });
+  const a = await fingerprint(record);
+  const b = await fingerprint({ ...record, fields: [{ ...record.fields[0], value: 'Wile E. II' }] });
+  assert.notEqual(a, b);
+  assert.equal(gate('1|https://acme.example', a), null);
+  t = 1000;
+  assert.equal(gate('1|https://acme.example', b), 'too-soon');
+  assert.equal(gate('2|https://acme.example', b), null, 'another tab is not throttled');
+  t = 6000;
+  assert.equal(gate('1|https://acme.example', a), 'duplicate');
+  assert.equal(gate('1|https://acme.example', b), null);
+  t = 6000 + 600000;
+  assert.equal(gate('1|https://acme.example', b), null, 'a repeat after the window goes through');
 });
 
 test('isSafelySaved: only submissions with both files where they belong', () => {

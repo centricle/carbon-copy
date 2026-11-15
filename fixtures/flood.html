@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Desert Signage Painter - ACME Corporation</title>
+  <meta property="og:site_name" content="ACME Corporation">
+  <link rel="stylesheet" href="fixtures.css">
+  <style>.dropzone { border: 2px dashed #888; padding: 1.5rem; margin: .5rem 0 1rem; }</style>
+</head>
+<body>
+  <h1>Desert Signage Painter</h1>
+  <p>A page whose scripts try to make records nobody submitted: a forged file
+  drop, a scripted click on Send, a synthetic submit event, and a
+  requestSubmit() loop. The test calls the window functions below.</p>
+
+  <form id="f">
+    <label for="name">Full name</label>
+    <input id="name" name="name">
+    <button type="submit">Submit</button>
+    <p id="status"></p>
+  </form>
+
+  <div>
+    <div>Portfolio</div>
+    <div id="drop" class="dropzone">Drop a file here</div>
+  </div>
+
+  <div id="chat">
+    <label for="note">Message the recruiter</label>
+    <input id="note">
+    <button id="send" type="button">Send</button>
+  </div>
+
+  <script>
+    const f = document.getElementById('f');
+    const name = document.getElementById('name');
+    let sent = 0;
+    f.addEventListener('submit', e => {
+      e.preventDefault();
+      document.getElementById('status').textContent = `Sent ${++sent}`;
+    });
+    const drop = document.getElementById('drop');
+    drop.addEventListener('dragover', e => e.preventDefault());
+    drop.addEventListener('drop', e => e.preventDefault());
+
+    window.forgeDrop = () => {
+      const dt = new DataTransfer();
+      dt.items.add(new File(['forged'], 'forged-portfolio.pdf', { type: 'application/pdf' }));
+      drop.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }));
+    };
+    window.forgeClick = () => document.getElementById('send').click();
+    window.forgeSubmitEvent = () => f.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    // Each pass changes the answer, so no pass is a duplicate of the last.
+    window.flood = n => {
+      for (let i = 0; i < n; i++) {
+        name.value = `Road Runner ${i}`;
+        name.dispatchEvent(new Event('input', { bubbles: true }));
+        f.requestSubmit();
+      }
+    };
+  </script>
+</body>
+</html>

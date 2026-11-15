@@ -119,7 +119,10 @@ Not on the Chrome Web Store yet.
   recorded site. It counts only once you have typed, picked or attached
   something: a form holding nothing but the page's own defaults makes no
   record. A submission blocked by the browser's own form validation stays a
-  draft.
+  draft. So does a second submission from the same tab and site within a few
+  seconds, or the same answers sent again within ten minutes: one copy on
+  disk, however often a page submits. **Save files** in the popup writes one
+  anyway. A click or a drop that a page script fakes never counts.
 
 ## Development
 
@@ -145,6 +148,7 @@ localhost; only the test copy does.
 | `src/background/sw.js` | Sessions, submit confirmation, storage, disk |
 | `src/lib/record.js` | The record schema |
 | `src/lib/coverage.js` | Which frames may be recorded (presets, granted sites) |
+| `src/lib/throttle.js` | One submission on disk per tab and site at a time |
 | `src/lib/render-md.js` | Record to Markdown |
 | `src/lib/sink-downloads.js` | Writes the files via `chrome.downloads` |
 | `src/presets/jobs.js` | Job-site hosts, and company/role from their URLs |
