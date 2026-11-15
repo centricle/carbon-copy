@@ -63,16 +63,26 @@
     return cleanLabel(byIds(el.ownerDocument, el.getAttribute('aria-labelledby')));
   }
 
+  // A field a person answers. Hidden inputs and buttons are not: ATS markup
+  // puts a hidden question id or a "?" help button between a question and
+  // its field, and neither one is the previous question.
+  const isAnswerable = el => !(el.tagName === 'INPUT' && SKIP_INPUT_TYPES.has(typeOf(el)));
+  const holdsField = node => (node.matches(FIELD_SEL) && isAnswerable(node))
+    || [...node.querySelectorAll(FIELD_SEL)].some(isAnswerable);
+  // Siblings that are never question text: skipped, not stopped at.
+  const NOT_TEXT_SEL = 'input, button, [role="button"], script, style, template, noscript';
+
   // The question text nearest *before* a field: walk up from the field and
-  // check each level's earlier siblings. A sibling holding its own controls
-  // is the previous question, so the walk stops there instead of borrowing
-  // that question's text. So does a block too long to be a question (the job
+  // check each level's earlier siblings. A sibling holding its own field is
+  // the previous question, so the walk stops there instead of borrowing that
+  // question's text. So does a block too long to be a question (the job
   // description above the form), checked before it is cloned.
   function precedingText(el, root, maxDepth = 5) {
     let node = el;
     for (let depth = 0; node && node !== root && depth < maxDepth; depth++, node = node.parentElement) {
       for (let sib = node.previousElementSibling; sib; sib = sib.previousElementSibling) {
-        if (sib.matches(CONTROL_SEL) || sib.querySelector(FIELD_SEL)) return '';
+        if (holdsField(sib)) return '';
+        if (sib.matches(NOT_TEXT_SEL)) continue;
         if ((sib.textContent || '').length > 1500) return '';
         const t = cleanLabel(textOf(sib));
         if (t) return t.slice(0, 300);

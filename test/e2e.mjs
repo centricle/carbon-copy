@@ -319,6 +319,7 @@ const cases = {
     await page.fill('input[name="p7"]', 'v7');
     await page.fill('input[name="name_only"]', 'v8');
     await page.fill('#p9', 'v9');
+    await page.fill('textarea[name="question_48213"]', 'v10');
     await Promise.all([page.waitForURL('**/submit'), page.click('button[type="submit"]')]);
     const rec = await submittedFor('labels');
     assert.deepEqual(
@@ -334,6 +335,7 @@ const cases = {
         ['Placeholder only', 'v7'],
         ['name_only', 'v8'],
         ['Starred', 'v9'],
+        ['Help button between', 'v10'],
       ],
     );
     await assertOnDisk(rec);
