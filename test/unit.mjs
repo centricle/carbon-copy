@@ -20,6 +20,7 @@ test('matchesPattern', () => {
   assert.ok(matchesPattern('https://*.greenhouse.io/*', 'https://greenhouse.io/'));
   assert.ok(!matchesPattern('https://*.greenhouse.io/*', 'https://evilgreenhouse.io/'));
   assert.ok(!matchesPattern('https://jobs.lever.co/*', 'http://jobs.lever.co/acme'));
+  assert.ok(matchesPattern('http://localhost/*', 'http://localhost:7072/fixtures/multistep.html'), 'any port');
   assert.ok(isPresetUrl('https://acme.wd5.myworkdayjobs.com/en-US/careers/job/x'));
   assert.ok(!isPresetUrl('https://acme.example/careers'));
 });

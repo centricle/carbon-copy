@@ -1,8 +1,12 @@
 import * as store from '../src/lib/store.js';
 import { heading } from '../src/lib/render-md.js';
-import { isPresetUrl } from '../src/presets/jobs.js';
+import { MATCHES, matchesPattern } from '../src/presets/jobs.js';
 
 const $ = id => document.getElementById(id);
+
+// What the content script actually matches, read from the running manifest
+// rather than the preset list: the test build adds localhost here.
+const STATIC_MATCHES = chrome.runtime.getManifest().content_scripts.flatMap(c => c.matches);
 const say = text => { $('msg').textContent = text; };
 
 // ------------------------------------------------------------- this site
@@ -28,8 +32,9 @@ async function renderSite() {
     return;
   }
   host.textContent = u.hostname;
-  if (isPresetUrl(u.href)) {
-    state.textContent = 'recording (job sites)';
+  const match = STATIC_MATCHES.find(p => matchesPattern(p, u.href));
+  if (match) {
+    state.textContent = MATCHES.includes(match) ? 'recording (job sites)' : 'recording (test build)';
     state.classList.add('on');
     return;
   }

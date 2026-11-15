@@ -4,7 +4,6 @@
 import { buildRecord, mergeSteps, STATUS } from '../lib/record.js';
 import * as store from '../lib/store.js';
 import { writeRecord, writeExport } from '../lib/sink-downloads.js';
-import { MATCHES } from '../presets/jobs.js';
 
 // If the page vanishes mid-submit (a native form navigating away), the
 // content script never gets to say whether the submit went through. Leaving
@@ -158,9 +157,13 @@ chrome.tabs.onRemoved.addListener(tabId => {
 // that origin from the popup. Registration lives here, not in the popup,
 // because the permission prompt can close the popup before its promise
 // resolves.
+// The manifest's own matches, not the preset list: the test build adds
+// localhost, and that must not be re-registered as an "added" site.
+const STATIC_MATCHES = chrome.runtime.getManifest().content_scripts.flatMap(c => c.matches);
+
 async function reconcileOptionalSites() {
   const { origins = [] } = await chrome.permissions.getAll();
-  const extra = origins.filter(o => !MATCHES.includes(o));
+  const extra = origins.filter(o => !STATIC_MATCHES.includes(o));
   const existing = await chrome.scripting.getRegisteredContentScripts({ ids: [OPTIONAL_SCRIPT_ID] });
   if (existing.length) await chrome.scripting.unregisterContentScripts({ ids: [OPTIONAL_SCRIPT_ID] });
   if (!extra.length) return [];
@@ -189,7 +192,7 @@ async function injectOpenTabs(origins) {
 chrome.permissions.onAdded.addListener(({ origins = [] }) => {
   enqueue(async () => {
     await reconcileOptionalSites();
-    await injectOpenTabs(origins.filter(o => !MATCHES.includes(o)));
+    await injectOpenTabs(origins.filter(o => !STATIC_MATCHES.includes(o)));
   });
 });
 chrome.permissions.onRemoved.addListener(() => enqueue(reconcileOptionalSites));
