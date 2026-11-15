@@ -1,0 +1,44 @@
+# On a version tag: test the tagged tree, zip exactly the shipped files,
+# attest that the zip was built here from this tag, and attach it to a
+# GitHub Release. That zip is the one uploaded to the Chrome Web Store, by
+# hand. Nothing here can publish to the store: there are no store
+# credentials in this repo, by design.
+#
+#   git tag -a v0.1.0 -m "v0.1.0" && git push origin v0.1.0
+#   gh release download v0.1.0 -p carbon-copy.zip
+#   gh attestation verify carbon-copy.zip -R centricle/carbon-copy
+
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Tag matches manifest version
+        run: test "v$(jq -r .version manifest.json)" = "$GITHUB_REF_NAME"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
+      - run: npm run package
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: carbon-copy.zip
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" carbon-copy.zip --repo "$GITHUB_REPOSITORY" --generate-notes --verify-tag

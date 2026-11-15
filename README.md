@@ -176,6 +176,17 @@ localhost; only the test copy does. The test copy is built from the same file
 list as the store zip (`scripts/package.mjs`), and the zip is reproducible: the
 same commit gives the same bytes.
 
+CI runs the whole suite on every push to `main`. A version tag (`v0.1.0`) runs
+it again on the tagged tree, then builds the zip, attests where it was built
+and attaches it to a GitHub Release. That release zip is the one uploaded to
+the Chrome Web Store, by hand: the repo holds no store credentials. To check a
+release zip yourself:
+
+```bash
+gh release download v0.1.0 -p carbon-copy.zip
+gh attestation verify carbon-copy.zip -R centricle/carbon-copy
+```
+
 | Path | What |
 |------|------|
 | `src/content/capture.js` | Finds fields, resolves labels, snapshots on submit |
