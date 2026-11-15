@@ -10,6 +10,8 @@ import { basename, slug, landedWhereAsked } from '../src/lib/sink-downloads.js';
 import { mergeSteps, isSafelySaved, buildRecord, LIMITS } from '../src/lib/record.js';
 import { createSubmitGate, fingerprint } from '../src/lib/throttle.js';
 import { isCovered, concreteOrigins } from '../src/lib/coverage.js';
+import { shippedFiles, buildZip } from '../scripts/package.mjs';
+import { posix } from 'node:path';
 
 // redact.js is a classic script for the content script: it sets a global.
 await import('../src/lib/redact.js');
@@ -31,6 +33,39 @@ const manifest = JSON.parse(await readFile(new URL('../manifest.json', import.me
 
 test('preset MATCHES equals the manifest content_scripts matches', () => {
   assert.deepEqual(manifest.content_scripts[0].matches, MATCHES);
+});
+
+test('every file the extension refers to ships, and the zip holds exactly the list', async () => {
+  const files = await shippedFiles();
+  const shipped = new Set(files);
+  const refs = new Set([
+    manifest.background.service_worker,
+    manifest.action.default_popup,
+    ...Object.values(manifest.icons),
+    ...Object.values(manifest.action.default_icon),
+    ...manifest.content_scripts.flatMap(c => c.js),
+  ]);
+  for (const f of files) {
+    const text = f.endsWith('.png') ? '' : await readFile(new URL(`../${f}`, import.meta.url), 'utf8');
+    const dir = posix.dirname(f);
+    // Relative src/href in pages, relative imports in modules.
+    for (const [, ref] of text.matchAll(/(?:src|href)="(?!https?:|#)([^"]+)"|from '(\.[^']+)'/g)) if (ref) refs.add(posix.join(dir, ref));
+    for (const [, ref] of text.matchAll(/from '(\.[^']+)'/g)) refs.add(posix.join(dir, ref));
+    // Root-relative paths in strings: getURL('welcome/welcome.html'), CONTENT_JS.
+    for (const [, ref] of text.matchAll(/'((?:src|popup|welcome|icons)\/[\w/.-]+\.(?:js|html|css|png))'/g)) refs.add(ref);
+  }
+  for (const r of refs) assert.ok(shipped.has(r), `referenced but not shipped: ${r}`);
+  assert.ok(shipped.has('welcome/welcome.html'));
+  assert.ok(!files.some(f => /^(test|fixtures|tmp|node_modules|scripts)\//.test(f)), files.join(' '));
+
+  const { buffer } = await buildZip();
+  const names = [];
+  for (let i = buffer.length - 22, cd = buffer.readUInt32LE(i + 16), n = buffer.readUInt16LE(i + 8); n--; ) {
+    const len = buffer.readUInt16LE(cd + 28);
+    names.push(buffer.toString('utf8', cd + 46, cd + 46 + len));
+    cd += 46 + len;
+  }
+  assert.deepEqual(names, files);
 });
 
 test('matchesPattern', () => {

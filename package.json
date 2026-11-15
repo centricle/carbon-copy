@@ -12,7 +12,7 @@
     "test:e2e": "node test/e2e.mjs",
     "fixtures": "node test/serve.mjs",
     "build:test": "node test/test-extension.mjs",
-    "package": "rm -f carbon-copy.zip && zip -r carbon-copy.zip manifest.json src popup icons/*.png LICENSE PRIVACY.md -x '*.DS_Store'",
+    "package": "node scripts/package.mjs",
     "icons": "node scripts/icons.mjs"
   },
   "devDependencies": {

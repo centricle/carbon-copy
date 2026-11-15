@@ -166,12 +166,15 @@ npm test                 # unit tests, then the end-to-end suite
 npm run test:e2e -- --headed --only=multistep
 npm run fixtures         # serve the test forms on http://localhost:7072
 npm run build:test       # tmp/test-extension: a copy that also records on localhost
+npm run package          # carbon-copy.zip, exactly the files that ship
 ```
 
 The end-to-end suite loads the extension into Playwright's Chromium, fills in
 each form in `fixtures/` and checks the stored records and the files on disk.
 It never submits anything to a real site. The shipped manifest does not match
-localhost; only the test copy does.
+localhost; only the test copy does. The test copy is built from the same file
+list as the store zip (`scripts/package.mjs`), and the zip is reproducible: the
+same commit gives the same bytes.
 
 | Path | What |
 |------|------|
@@ -184,6 +187,8 @@ localhost; only the test copy does.
 | `src/lib/render-md.js` | Record to Markdown |
 | `src/lib/sink-downloads.js` | Writes the files via `chrome.downloads` |
 | `src/presets/jobs.js` | Job-site hosts, and company/role from their URLs |
+| `welcome/` | First-run page: what is recorded, and Start recording |
+| `scripts/package.mjs` | The list of shipped files, and the store zip |
 
 ## License
 
