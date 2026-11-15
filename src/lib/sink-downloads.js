@@ -65,9 +65,11 @@ function settle(id, timeoutMs = 15000) {
 // download. Verified case: when ~/Downloads/carbon-copy is a symlink, Chrome
 // refuses to write through it and saves "download.md" at the top of the
 // download folder instead. Name and folder both gone, state "complete".
-function landedWhereAsked(actual, requested) {
+// DownloadItem.filename is a native path, so on Windows it uses backslashes.
+export function landedWhereAsked(actual, requested) {
+  const path = String(actual || '').replace(/\\/g, '/');
   const want = requested.split('/').pop().replace(/\.[^.]+$/, '');
-  return actual.includes(`/${DIR}/`) && actual.split('/').pop().startsWith(want);
+  return path.includes(`/${DIR}/`) && path.split('/').pop().startsWith(want);
 }
 
 async function writeOne(filename, body, mime) {

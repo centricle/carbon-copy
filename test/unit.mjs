@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { MATCHES, extractContext, matchesPattern, isPresetUrl } from '../src/presets/jobs.js';
 import { renderMarkdown, heading } from '../src/lib/render-md.js';
-import { basename, slug } from '../src/lib/sink-downloads.js';
+import { basename, slug, landedWhereAsked } from '../src/lib/sink-downloads.js';
 import { mergeSteps, isSafelySaved } from '../src/lib/record.js';
 
 const manifest = JSON.parse(await readFile(new URL('../manifest.json', import.meta.url), 'utf8'));
@@ -93,6 +93,16 @@ test('slug and basename', () => {
   assert.equal(slug('Café Société: Anvils & Co.'), 'cafe-societe-anvils-co');
   assert.match(basename(record), /^2026-11-1[56]-acme-corporation-anvil-engineer$/);
   assert.match(basename({ ...record, context: {} }), /-boards-greenhouse-io-apply-now$/);
+});
+
+test('landedWhereAsked: POSIX and Windows paths, uniquified names, symlink fallout', () => {
+  const asked = 'carbon-copy/2026-11-15-acme-corporation-anvil-engineer.md';
+  assert.ok(landedWhereAsked('/Users/wile/Downloads/carbon-copy/2026-11-15-acme-corporation-anvil-engineer.md', asked));
+  assert.ok(landedWhereAsked('C:\\Users\\wile\\Downloads\\carbon-copy\\2026-11-15-acme-corporation-anvil-engineer.md', asked));
+  assert.ok(landedWhereAsked('C:\\Users\\wile\\Downloads\\carbon-copy\\2026-11-15-acme-corporation-anvil-engineer (1).md', asked));
+  assert.ok(!landedWhereAsked('/Users/wile/Downloads/download.md', asked), 'symlinked folder: Chrome saves download.md at the top');
+  assert.ok(!landedWhereAsked('C:\\Users\\wile\\Downloads\\download.md', asked));
+  assert.ok(!landedWhereAsked('', asked));
 });
 
 test('isSafelySaved: only submissions with both files where they belong', () => {
