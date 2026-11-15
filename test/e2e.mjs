@@ -111,6 +111,19 @@ const submittedFor = (path, by = 'url') => waitFor(
 
 const byLabel = rec => Object.fromEntries(rec.fields.map(f => [f.label, f]));
 
+// A real (trusted) file drop, through the browser's input pipeline rather
+// than a script-built DataTransfer. The file is written under the temp dir.
+async function dropFile(page, selector, name) {
+  const path = join(work, name);
+  await writeFile(path, RESUME);
+  const box = await page.locator(selector).boundingBox();
+  const at = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  const data = { items: [], files: [path], dragOperationsMask: 1 };
+  const cdp = await page.context().newCDPSession(page);
+  for (const type of ['dragEnter', 'dragOver', 'drop']) await cdp.send('Input.dispatchDragEvent', { type, ...at, data });
+  await cdp.detach();
+}
+
 async function assertOnDisk(rec) {
   assert.ok(rec.sink && !rec.sink.error, `sink failed: ${rec.sink?.error}`);
   assert.equal(rec.sink.warning, undefined, rec.sink.warning);
@@ -281,6 +294,26 @@ const cases = {
     assert.deepEqual(all.map(r => r.fields.length).sort(), [1, 1], `phantom record: ${JSON.stringify(all.map(r => [r.status, r.fields.length, r.files.length]))}`);
     await assertOnDisk(first);
     await assertOnDisk(second);
+  },
+
+  // The redaction and EEO rules apply to files too, picked or dropped.
+  async 'uploads'(page) {
+    await page.goto(`${base}/fixtures/uploads.html`);
+    await page.fill('#name', 'Wile E. Coyote');
+    const pdf = name => ({ name, mimeType: 'application/pdf', buffer: RESUME });
+    await page.setInputFiles('#resume', pdf('wile-e-coyote-resume.pdf'));
+    await page.setInputFiles('#ssncard', { name: 'ssn-card-scan.png', mimeType: 'image/png', buffer: Buffer.from('not a real card') });
+    await page.setInputFiles('#dis', pdf('disability-letter.pdf'));
+    await dropFile(page, '#portfolio-drop', 'acme-portfolio.pdf');
+    await dropFile(page, '#vet-drop', 'dd-214.pdf');
+    await page.waitForSelector('#vet-drop:has-text("Attached")');
+    await Promise.all([page.waitForURL('**/submit'), page.click('button[type="submit"]')]);
+    const rec = await submittedFor('uploads.html');
+    assert.deepEqual(rec.files.map(f => [f.label, f.name]).sort(), [['Portfolio', 'acme-portfolio.pdf'], ['Resume', 'wile-e-coyote-resume.pdf']]);
+    const blob = JSON.stringify(rec);
+    for (const name of ['ssn-card-scan', 'disability-letter', 'dd-214']) assert.ok(!blob.includes(name), `${name} recorded`);
+    assert.deepEqual(rec.redacted, { secret: 1, eeo: 1 });
+    await assertOnDisk(rec);
   },
 
   async 'clear-on-click'(page) {

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Bird Seed Logistics Lead - ACME Corporation</title>
+  <meta property="og:site_name" content="ACME Corporation">
+  <link rel="stylesheet" href="fixtures.css">
+  <style>.dropzone { border: 2px dashed #888; padding: 1.5rem; margin: .5rem 0 1rem; }</style>
+</head>
+<body>
+  <h1>Bird Seed Logistics Lead</h1>
+  <p>File inputs and drop zones under labels the redaction rules know: a
+  Social Security card, a document in the EEO section. Only the resume and
+  the portfolio may be recorded.</p>
+
+  <form action="/submit" method="post" enctype="multipart/form-data">
+    <label for="name">Full name</label>
+    <input id="name" name="name">
+
+    <label for="resume">Resume</label>
+    <input id="resume" name="resume" type="file">
+
+    <label for="ssncard">Social Security card (scan)</label>
+    <input id="ssncard" name="ssncard" type="file">
+
+    <div>Portfolio</div>
+    <div id="portfolio-drop" class="dropzone">Drop a file here</div>
+
+    <div id="eeoc_fields">
+      <label for="dis">Disability documentation</label>
+      <input id="dis" name="dis" type="file">
+      <div>Veteran status documentation (DD-214)</div>
+      <div id="vet-drop" class="dropzone">Drop a file here</div>
+    </div>
+
+    <button type="submit">Submit application</button>
+  </form>
+
+  <script>
+    for (const zone of document.querySelectorAll('.dropzone')) {
+      zone.addEventListener('dragover', e => e.preventDefault());
+      zone.addEventListener('drop', e => {
+        e.preventDefault();
+        zone.textContent = `Attached ${e.dataTransfer.files[0]?.name}`;
+      });
+    }
+  </script>
+</body>
+</html>

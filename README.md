@@ -67,11 +67,12 @@ Skipped before anything leaves the page:
 
 These rules read each field's type, `autocomplete` attribute, label and name,
 never its value. A sensitive answer in a field with an ordinary label, such as
-a bank account number, is recorded like any other answer. The rules do not
-yet apply to file uploads: an attached file's name and hash are kept whatever
-its field is labeled. A field hidden with CSS is kept if you filled it in,
-because that is how single-page forms hide the steps you have already
-finished.
+a bank account number, is recorded like any other answer. The same rules,
+and the EEO setting below, cover file uploads, judged by the label of the
+input or drop zone: a file attached as a Social Security card is not
+recorded at all, name and hash included. A field hidden with CSS is kept if
+you filled it in, because that is how single-page forms hide the steps you
+have already finished.
 
 EEO self-identification answers (gender, race, veteran and disability status)
 are skipped by default, recognized by their labels and by the section of the

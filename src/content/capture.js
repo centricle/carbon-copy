@@ -268,6 +268,15 @@
     return hashes.get(file);
   }
 
+  const fileKey = (input, label) => `file:${input.getAttribute('name') || input.id || label}`;
+
+  // The same never-record and EEO rules as any other field, by the label of
+  // the input or drop zone the file went into. A file name can say as much
+  // as an answer ("ssn-card-scan.png").
+  function fileAllowed(el, label) {
+    return !R.secretReason(el, label) && (settings.captureEEO || !R.isEEO(el, label));
+  }
+
   // ATS upload widgets often send the file the moment it is chosen and then
   // clear the input, so a file is remembered when it is picked, not only
   // when the form is submitted.
@@ -370,8 +379,10 @@
 
       if (type === 'file') {
         const label = labelFor(el, root);
-        if (!allow(el, label)) continue;
-        if (el.files && el.files.length) rememberFiles(`file:${name || label}`, label, el.files);
+        // Rejected now (the EEO toggle may have changed since): forget
+        // anything remembered for this input too.
+        if (!allow(el, label)) { seenFiles.delete(fileKey(el, label)); continue; }
+        if (el.files && el.files.length) rememberFiles(fileKey(el, label), label, el.files);
         continue;
       }
 
@@ -497,7 +508,8 @@
     if (!(t instanceof Element)) return;
     if (e.type === 'change' && t.matches('input[type="file"]')) {
       const label = labelFor(t, scopeOf(t));
-      rememberFiles(`file:${t.getAttribute('name') || t.id || label}`, label, t.files || []);
+      if (fileAllowed(t, label)) rememberFiles(fileKey(t, label), label, t.files || []);
+      else seenFiles.delete(fileKey(t, label));
     }
     if (!isField(t)) return;
     markEdited(t);
@@ -511,6 +523,10 @@
     if (!files || !files.length || !(e.target instanceof Element)) return;
     if (e.target.matches('input[type="file"]')) return; // its change event covers it
     const label = precedingText(e.target, document) || cleanLabel(textOf(e.target)).slice(0, 80) || 'Dropped file';
+    // Judged by the zone's own label and the section it sits in. Not by a
+    // nearby file input: from a zone, the nearest one is as likely to be
+    // the previous question's.
+    if (!fileAllowed(e.target, label)) return;
     rememberFiles(`drop:${label}`, label, files);
   }
 

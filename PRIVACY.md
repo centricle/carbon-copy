@@ -18,10 +18,10 @@ It skips password fields, fields marked as one-time codes, and fields marked
 or labeled as payment card details or a Social Security or social insurance
 number. It recognizes these by each field's type, `autocomplete` attribute,
 label and name, not by what you typed, so a sensitive answer in a field with
-an ordinary label is stored like any other. File uploads are not filtered: an
-attached file's name and hash are stored whatever its field is labeled. EEO
-self-identification answers are not stored unless you turn that on in the
-popup.
+an ordinary label is stored like any other. EEO self-identification answers
+are not stored unless you turn that on in the popup. Both rules apply to
+attached files too, judged by the label of the field or drop zone the file
+went into: a skipped file's name and hash are not stored.
 
 ## Where it is stored
 
