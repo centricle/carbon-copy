@@ -90,6 +90,7 @@ await ext.goto(`chrome-extension://${extId}/popup/popup.html`);
     process.exit(2);
   }
   await rm(probe.filename);
+  await ext.evaluate(id => chrome.downloads.erase({ id }), probe.id);
 }
 
 const records = () => ext.evaluate(async () => (await import('/src/lib/store.js')).list());
@@ -139,8 +140,11 @@ async function assertOnDisk(rec) {
   assert.equal(rec.sink.warning, undefined, rec.sink.warning);
   assert.ok(rec.sink.md.startsWith(join(downloads, 'carbon-copy')), `md outside downloads dir: ${rec.sink.md}`);
   const md = await readFile(rec.sink.md, 'utf8');
-  const json = JSON.parse(await readFile(rec.sink.json, 'utf8'));
+  const jsonText = await readFile(rec.sink.json, 'utf8');
+  const json = JSON.parse(jsonText);
   assert.equal(json.id, rec.id);
+  assert.equal('sink' in json, false, 'sink written to the file');
+  assert.ok(!jsonText.includes(downloads) && !md.includes(downloads), 'absolute save path in a file');
   assert.equal(json.schema, 1);
   assert.match(md, /^---\ncaptured: "/);
   assert.match(md, new RegExp(`status: "submitted"`));
@@ -218,6 +222,13 @@ const cases = {
     assert.match(basename(rec.sink.md), /^\d{4}-\d{2}-\d{2}-acme-corporation-senior-anvil-engineer\.md$/);
     assert.ok(md.includes(`## Why ACME?\n\n${WHY}\n`), 'markdown answer');
     assert.ok(md.includes(RESUME_SHA), 'markdown file hash');
+
+    // Save files again: the stored record now has a sink full of absolute
+    // paths, and the new copy must not carry them.
+    const res = await ext.evaluate(id => chrome.runtime.sendMessage({ type: 'cc:redownload', id }), rec.id);
+    assert.ok(res.ok, res.error);
+    assert.notEqual(res.record.sink.json, rec.sink.json);
+    await assertOnDisk(res.record);
   },
 
   async 'eeo-toggle'(page) {
@@ -612,6 +623,11 @@ const cases = {
       const s = res.record.sink;
       assert.deepEqual(await readdir(elsewhere), [], 'Chrome wrote through the symlink');
       assert.match(s.warning || s.error || '', /symlink/, JSON.stringify(s));
+      // Saved, failed or misplaced, no entry in chrome://downloads may keep
+      // the record in its data: URL.
+      const left = await ext.evaluate(async () => (await chrome.downloads.search({}))
+        .filter(i => /^data:(text\/markdown|application\/json)/.test(i.url)).map(i => `${i.state} ${i.error || ''} ${i.filename}`));
+      assert.deepEqual(left, [], 'download entries left behind');
       if (s.md) await rm(s.md, { force: true });
       if (s.json) await rm(s.json, { force: true });
     } finally {

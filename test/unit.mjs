@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { MATCHES, extractContext, matchesPattern, isPresetUrl } from '../src/presets/jobs.js';
 import { renderMarkdown, heading } from '../src/lib/render-md.js';
-import { basename, slug, landedWhereAsked } from '../src/lib/sink-downloads.js';
+import { basename, slug, landedWhereAsked, fileCopy } from '../src/lib/sink-downloads.js';
 import { mergeSteps, isSafelySaved, buildRecord, LIMITS } from '../src/lib/record.js';
 import { createSubmitGate, fingerprint } from '../src/lib/throttle.js';
 import { isCovered, concreteOrigins } from '../src/lib/coverage.js';
@@ -176,6 +176,15 @@ test('landedWhereAsked: POSIX and Windows paths, uniquified names, symlink fallo
   assert.ok(!landedWhereAsked('/Users/wile/Downloads/download.md', asked), 'symlinked folder: Chrome saves download.md at the top');
   assert.ok(!landedWhereAsked('C:\\Users\\wile\\Downloads\\download.md', asked));
   assert.ok(!landedWhereAsked('', asked));
+});
+
+test('fileCopy leaves out sink paths', () => {
+  const saved = { ...record, sink: { md: '/Users/wile/Downloads/carbon-copy/a.md', json: '/Users/wile/Downloads/carbon-copy/a.json' } };
+  const out = fileCopy(saved);
+  assert.equal('sink' in out, false);
+  assert.ok(!JSON.stringify(out).includes('/Users/wile'));
+  assert.equal(out.id, record.id);
+  assert.ok(saved.sink, 'the stored record keeps its sink');
 });
 
 test('isCovered: manifest matches, granted sites, nothing else', async () => {

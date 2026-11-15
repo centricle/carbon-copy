@@ -79,17 +79,31 @@ async function writeOne(filename, body, mime) {
     saveAs: false,
     conflictAction: 'uniquify',
   });
-  const item = await settle(id);
-  // Clears the entry from chrome://downloads; the file stays on disk.
-  await chrome.downloads.erase({ id });
-  return { path: item.filename, ok: landedWhereAsked(item.filename, filename) };
+  try {
+    const item = await settle(id);
+    return { path: item.filename, ok: landedWhereAsked(item.filename, filename) };
+  } catch (err) {
+    // Stuck or interrupted: stop it, so no partial file is left behind.
+    await chrome.downloads.cancel(id).catch(() => {});
+    throw err;
+  } finally {
+    // The entry in chrome://downloads holds the whole record in its data:
+    // URL, so it goes whether the save worked or not. A saved file stays on
+    // disk.
+    await chrome.downloads.erase({ id }).catch(() => {});
+  }
 }
+
+// What goes into a file: the record without `sink`, which holds absolute
+// paths (and so the OS username) of where earlier copies were saved. A file
+// someone shares should not carry that.
+export const fileCopy = ({ sink, ...rest }) => rest;
 
 // Returns { md, json, at, warning? }: absolute paths as Chrome reports them.
 export async function writeRecord(record) {
   const base = `${DIR}/${basename(record)}`;
   const md = await writeOne(`${base}.md`, renderMarkdown(record), 'text/markdown');
-  const json = await writeOne(`${base}.json`, JSON.stringify(record, null, 2) + '\n', 'application/json');
+  const json = await writeOne(`${base}.json`, JSON.stringify(fileCopy(record), null, 2) + '\n', 'application/json');
   const out = { md: md.path, json: json.path, at: new Date().toISOString() };
   if (!md.ok || !json.ok) {
     out.warning = `Chrome saved these files somewhere other than ~/Downloads/${DIR}/. Is that folder a symlink? Chrome will not write through one.`;
@@ -99,6 +113,6 @@ export async function writeRecord(record) {
 
 export async function writeExport(records) {
   const name = `${DIR}/export-${localDate(new Date().toISOString())}.json`;
-  const body = JSON.stringify({ exportedAt: new Date().toISOString(), records }, null, 2) + '\n';
+  const body = JSON.stringify({ exportedAt: new Date().toISOString(), records: records.map(fileCopy) }, null, 2) + '\n';
   return (await writeOne(name, body, 'application/json')).path;
 }

@@ -64,8 +64,9 @@ server, no analytics, no tracking and no third-party code.
 ## Deleting your data
 
 Delete the files from your Downloads folder. Removing the extension deletes
-everything it stored in the browser. If a save fails, Chrome's download list
-(`chrome://downloads`) can keep an entry for it. Remove it there.
+everything it stored in the browser. Carbon Copy removes each save from
+Chrome's download list (`chrome://downloads`) as soon as it finishes, whether
+it worked or not, so no copy is left there.
 
 ## Contact
 
