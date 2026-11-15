@@ -603,6 +603,48 @@ const cases = {
     assert.equal((await records()).length, before);
   },
 
+  // Export all after months of use: one file holding every record. The
+  // service worker has no URL.createObjectURL, so the body goes out as a
+  // single data: URL, and this checks Chrome takes one this size.
+  async 'export-large'() {
+    const filler = 'Anvil, frankly superb; ships overnight. '.repeat(2000); // 80 KB
+    const ids = await ext.evaluate(async text => {
+      const store = await import('/src/lib/store.js');
+      const ids = [];
+      for (let i = 0; i < 20; i++) {
+        const id = `export-seed-${i}`;
+        await store.put({
+          schema: 1, id, status: 'draft', trigger: 'input', capturedAt: '2026-01-01T00:00:00.000Z',
+          page: { url: 'https://acme.example/apply', title: 'Seed', frameUrl: '', origin: 'https://acme.example' },
+          context: { company: 'ACME Corporation', role: `Seed ${i}` }, preset: null,
+          fields: [{ label: 'Why ACME?', type: 'textarea', value: text, display: text, step: 1 }],
+          files: [], redacted: { secret: 0, eeo: 0 }, evidence: [], sink: null,
+        });
+        ids.push(id);
+      }
+      return ids;
+    }, filler);
+    try {
+      const urlBytes = await ext.evaluate(async () => {
+        const all = await (await import('/src/lib/store.js')).list();
+        return encodeURIComponent(JSON.stringify({ records: all }, null, 2)).length;
+      });
+      assert.ok(urlBytes > 3 * 1024 * 1024, `seeded only ${urlBytes} bytes`);
+      const t = Date.now();
+      const res = await ext.evaluate(() => chrome.runtime.sendMessage({ type: 'cc:export' }));
+      assert.ok(res.ok, `export of a ${(urlBytes / 1048576).toFixed(1)} MB data: URL failed: ${res.error}`);
+      const text = await readFile(res.record.path, 'utf8');
+      const out = JSON.parse(text);
+      assert.ok(ids.every(id => out.records.some(r => r.id === id)), 'seeded records missing from export');
+      assert.equal(out.records.length, (await records()).length);
+      assert.ok(!out.records.some(r => 'sink' in r) && !text.includes(downloads), 'save paths in the export');
+      console.log(`      export: ${(urlBytes / 1048576).toFixed(1)} MB data: URL, ${out.records.length} records, ${Date.now() - t}ms`);
+      await rm(res.record.path);
+    } finally {
+      await ext.evaluate(async ids => (await import('/src/lib/store.js')).removeMany(ids), ids);
+    }
+  },
+
   // Runs last: it swaps the download folder for a symlink. Chrome never
   // writes through one. Seen so far, depending on circumstances: it saves
   // "download.md" at the top of the download folder and reports success
