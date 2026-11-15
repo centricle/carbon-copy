@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Welcome to Carbon Copy</title>
+  <link rel="icon" href="../icons/icon-32.png">
+  <link rel="stylesheet" href="welcome.css">
+</head>
+<body>
+  <main>
+    <header>
+      <img src="../icons/icon-128.png" alt="" width="48" height="48">
+      <div>
+        <h1>Carbon Copy</h1>
+        <p class="lede">Keeps a copy of what you submit in job applications and other web
+        forms, as plain files on your own disk.</p>
+      </div>
+    </header>
+
+    <p class="callout">Nothing is recorded until you click <strong>Start recording</strong>
+    at the bottom of this page. Here is what that turns on.</p>
+
+    <section>
+      <h2>What is recorded</h2>
+      <p>When you submit a form on a recorded site: each question as the page
+      labels it, the answer you gave, and the name, size, type and SHA-256 hash
+      of any file you attach. The file is read inside the page to compute the
+      hash; its contents are never stored. Each record also keeps the page's
+      address and title.</p>
+    </section>
+
+    <section>
+      <h2>On which sites</h2>
+      <p>The candidate pages of these job application systems: Greenhouse and
+      Lever job boards, Ashby, Workday, Workable, SmartRecruiters, the
+      <code>/jobs/</code> pages of iCIMS and the <code>/careers/</code> pages of
+      BambooHR.</p>
+      <p>Anywhere else, only after you open the toolbar popup on that site and
+      choose <strong>Record this site</strong>. Chrome asks for permission one
+      site at a time.</p>
+    </section>
+
+    <section>
+      <h2>When</h2>
+      <p>A record is made when you click a button labeled Submit, Apply or Send,
+      or press Enter to submit, after filling something in. A submission the
+      browser blocks for a missing answer stays a draft.</p>
+    </section>
+
+    <section>
+      <h2>What is skipped</h2>
+      <ul>
+        <li>Passwords and one-time codes</li>
+        <li>Card, bank and tax ID numbers, Social Security and social insurance
+        numbers, and dates of birth, recognized by their labels</li>
+        <li>The number in a passport, driver's license or national ID field</li>
+        <li>Any answer that is entirely a card number, a nine-digit number (the
+        shape of an SSN or a routing number) or an IBAN, whatever the field is
+        called</li>
+        <li>EEO self-identification answers (gender, race, veteran and
+        disability status), unless you turn them on in the popup</li>
+      </ul>
+      <p class="muted">These rules are a safety net, not a guarantee. A secret
+      written out in words is recorded like any other answer.</p>
+    </section>
+
+    <section>
+      <h2>Drafts stay in the browser</h2>
+      <p>While you type, a draft is kept in the browser so a crash or a closed
+      tab does not lose your work. Drafts are never written to disk on their
+      own; only <strong>Save files</strong> or <strong>Export all</strong> in
+      the popup does that. They stay in the browser until you remove the
+      extension.</p>
+    </section>
+
+    <section>
+      <h2>Where the files go</h2>
+      <p>Each submission becomes two files in <code>Downloads/carbon-copy/</code>:
+      a Markdown file to read and a JSON file for scripts. Chrome may show them
+      in its downloads bubble as they save.</p>
+      <p>If Chrome is set to <em>Ask where to save each file before
+      downloading</em> (Settings, Downloads), you will see two save dialogs per
+      submission. Turn that setting off to save without asking.</p>
+    </section>
+
+    <section>
+      <h2>Nothing leaves your device</h2>
+      <p>Carbon Copy makes no network requests. No account, no server, no
+      analytics. Read the full <a href="https://github.com/centricle/carbon-copy/blob/main/PRIVACY.md"
+      target="_blank" rel="noopener">privacy policy</a>.</p>
+    </section>
+
+    <div class="actions">
+      <button id="start" type="button">Start recording</button>
+      <p id="started" hidden>Recording since <span id="started-at"></span>. You can close this tab.</p>
+    </div>
+  </main>
+
+  <script type="module" src="welcome.js"></script>
+</body>
+</html>

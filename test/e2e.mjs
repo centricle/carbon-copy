@@ -93,7 +93,16 @@ await ext.goto(`chrome-extension://${extId}/popup/popup.html`);
 }
 
 const records = () => ext.evaluate(async () => (await import('/src/lib/store.js')).list());
-const setSettings = s => ext.evaluate(v => chrome.storage.local.set({ settings: v }), s);
+// Merged into the stored settings, never replacing them: consentedAt lives there too.
+const setSettings = s => ext.evaluate(async v => {
+  const { settings = {} } = await chrome.storage.local.get('settings');
+  await chrome.storage.local.set({ settings: { ...settings, ...v } });
+}, s);
+const WELCOME = `chrome-extension://${extId}/welcome/welcome.html`;
+
+// Every case but 'consent' runs as if the welcome page's Start recording
+// had been clicked.
+await setSettings({ consentedAt: new Date().toISOString() });
 
 async function waitFor(pick, what, timeout = 12000) {
   const end = Date.now() + timeout;
@@ -512,6 +521,51 @@ const cases = {
     assert.ok(titles.length > 0);
     assert.ok(titles.some(t => t.includes('at ACME Corporation')), `popup titles: ${titles.join(' | ')}`);
     assert.deepEqual(errors, []);
+  },
+
+  // Nothing is recorded before Start recording on the welcome page, which
+  // opened on its own at install.
+  async 'consent'(page) {
+    assert.ok(context.pages().some(p => p.url() === WELCOME), 'welcome page did not open on install');
+    const fill = async q => {
+      await page.goto(`${base}/fixtures/spa-fetch.html?${q}`);
+      await page.fill('#name', 'Wile E. Coyote');
+      await page.fill('#pitch', `Consent check, ${q}.`);
+    };
+    const ours = async q => (await records()).filter(r => r.page.url.includes(`spa-fetch.html?${q}`));
+    const list = () => readdir(join(downloads, 'carbon-copy')).catch(() => []);
+    const before = await list();
+    const saved = await ext.evaluate(async () => (await chrome.storage.local.get('settings')).settings);
+    await ext.evaluate(s => chrome.storage.local.set({ settings: { ...s, consentedAt: undefined } }), saved);
+    try {
+      const popup = await context.newPage();
+      await popup.goto(`chrome-extension://${extId}/popup/popup.html`);
+      await popup.waitForFunction(() => document.getElementById('site-state').textContent === 'not recording yet');
+      assert.equal(await popup.textContent('#site-toggle'), 'Set up and start recording');
+      await popup.close();
+
+      await fill('before');
+      await page.click('#go');
+      await page.waitForSelector('#done');
+      await page.waitForTimeout(2500);
+      assert.deepEqual(await ours('before'), [], 'recorded before consent');
+      assert.deepEqual(await list(), before, 'files written before consent');
+
+      const welcome = await context.newPage();
+      await welcome.goto(WELCOME);
+      await welcome.click('#start');
+      await welcome.waitForSelector('#started:not([hidden])');
+      assert.ok(await welcome.isHidden('#start'));
+      await welcome.close();
+
+      await fill('after');
+      await page.click('#go');
+      await page.waitForSelector('#done');
+      const rec = await submittedFor('spa-fetch.html?after');
+      await assertOnDisk(rec);
+    } finally {
+      await setSettings({ consentedAt: saved.consentedAt });
+    }
   },
 
   // The SW stores snapshots only from frames on a covered site. "Stop

@@ -5,7 +5,11 @@ later. Everything it keeps stays on your computer.
 
 ## What it stores
 
-On sites it is allowed to run on, Carbon Copy reads the form fields on the
+Nothing until you agree to it. Installing Carbon Copy opens a welcome page
+that describes what it records, and it records nothing until you click
+**Start recording** there.
+
+Once you have, on sites it is allowed to run on, Carbon Copy reads the form fields on the
 page: each field's label and the value you entered, plus the name, size, type
 and a SHA-256 hash of any file you attach. It reads an attached file only
 inside the page, to compute that hash, and never stores or sends its contents.
@@ -33,7 +37,8 @@ went into: a skipped file's name and hash are not stored.
 - In your browser's local extension storage (IndexedDB), on your device.
   Records, drafts included, stay there until you remove the extension.
   **Clear** in the popup removes the submissions already saved to disk.
-- Your settings, in the extension's local storage, and a note of which open
+- Your settings (including when you clicked Start recording), in the
+  extension's local storage, and a note of which open
   tab belongs to which record, in its session storage, which the browser
   empties when it closes.
 - In files that Carbon Copy saves to your Downloads folder when you submit a

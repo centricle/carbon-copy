@@ -19,6 +19,8 @@ async function activeTab() {
 }
 
 async function renderSite() {
+  const { settings = {} } = await chrome.storage.local.get('settings');
+  if (!settings.consentedAt) return renderNoConsent();
   const tab = await activeTab();
   let u = null;
   try { u = new URL(tab?.url || ''); } catch { /* no access, or a browser page */ }
@@ -68,6 +70,21 @@ async function renderSite() {
         : 'Chrome\'s site access for Carbon Copy is set to "On all sites", which it does not record through. Set it to "On specific sites" in chrome://extensions, then try again.');
     }
     renderSite();
+  };
+}
+
+// Before "Start recording" on the welcome page, no site is recorded, so
+// the site row says so and "Record this site" is not offered.
+function renderNoConsent() {
+  $('site-host').textContent = 'Carbon Copy';
+  $('site-state').textContent = 'not recording yet';
+  $('site-state').className = 'state';
+  const btn = $('site-toggle');
+  btn.hidden = false;
+  btn.textContent = 'Set up and start recording';
+  btn.onclick = async () => {
+    await chrome.tabs.create({ url: chrome.runtime.getURL('welcome/welcome.html') });
+    window.close();
   };
 }
 

@@ -49,6 +49,10 @@ The file hash answers "which version of my resume did I send?"
 
 ## What is recorded, and what is skipped
 
+Nothing, until you say so. Installing Carbon Copy opens a welcome page that
+explains what it records, and it records nothing until you click **Start
+recording** there.
+
 Recorded, at the moment you press Submit: every text field, text area,
 dropdown, radio group, checkbox and rich-text editor in the form, with its
 label, plus the name, size, type and SHA-256 hash of any file you attach. The
@@ -130,6 +134,7 @@ Not on the Chrome Web Store yet.
 1. Clone this repo.
 2. Open `chrome://extensions` and turn on **Developer mode**.
 3. **Load unpacked** and choose the repo folder.
+4. Read the welcome page that opens and click **Start recording**.
 
 ## Good to know
 

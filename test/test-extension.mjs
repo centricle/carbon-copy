@@ -15,7 +15,7 @@ export const LOCAL_MATCHES = ['http://localhost/*', 'http://127.0.0.1/*'];
 export async function buildTestExtension(outDir) {
   await rm(outDir, { recursive: true, force: true });
   await mkdir(outDir, { recursive: true });
-  for (const p of ['src', 'popup', 'icons']) await cp(join(ROOT, p), join(outDir, p), { recursive: true });
+  for (const p of ['src', 'popup', 'welcome', 'icons']) await cp(join(ROOT, p), join(outDir, p), { recursive: true });
   const manifest = JSON.parse(await readFile(join(ROOT, 'manifest.json'), 'utf8'));
   manifest.content_scripts[0].matches.push(...LOCAL_MATCHES);
   manifest.name += ' (test build)';

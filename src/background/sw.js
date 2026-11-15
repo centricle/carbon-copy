@@ -12,6 +12,7 @@ import { createSubmitGate, fingerprint } from '../lib/throttle.js';
 // the page right after clicking Submit is the strongest sign it did.
 const PENDING_TIMEOUT_MS = 3000;
 const OPTIONAL_SCRIPT_ID = 'cc-optional-sites';
+const WELCOME_URL = chrome.runtime.getURL('welcome/welcome.html');
 const CONTENT_JS = ['src/lib/redact.js', 'src/content/capture.js'];
 
 // ------------------------------------------------------------- sessions
@@ -101,6 +102,9 @@ async function handle(msg, sender) {
       // in an open tab, so its snapshots stop here instead. Anything that
       // is not a frame on a covered site (an extension page, say) too.
       if (!(await isCovered(sender.url, STATIC_MATCHES, isGranted))) return null;
+      // Nothing is recorded, not even a draft, until "Start recording" on
+      // the welcome page. Read per snapshot, so it holds across restarts.
+      if (!(await hasConsent())) return null;
       const key = sessionKey(sender);
       if (msg.status === 'draft') return upsert(key, msg.snapshot, STATUS.DRAFT, msg.trigger);
       if (msg.status === 'submitted') {
@@ -138,6 +142,11 @@ async function handle(msg, sender) {
     default:
       return undefined;
   }
+}
+
+async function hasConsent() {
+  const { settings } = await chrome.storage.local.get('settings');
+  return !!settings?.consentedAt;
 }
 
 // One at a time: two snapshots for the same session must not interleave
@@ -225,4 +234,14 @@ chrome.permissions.onAdded.addListener(({ origins = [] }) => {
   });
 });
 chrome.permissions.onRemoved.addListener(() => enqueue(reconcileOptionalSites));
-chrome.runtime.onInstalled.addListener(() => enqueue(reconcileOptionalSites));
+// The welcome page opens on install, and on an update while consent is
+// still missing: an install from before the consent gate existed records
+// nothing until someone clicks Start recording, so it must say so.
+chrome.runtime.onInstalled.addListener(({ reason }) => {
+  enqueue(async () => {
+    await reconcileOptionalSites();
+    if (reason === 'install' || (reason === 'update' && !(await hasConsent()))) {
+      await chrome.tabs.create({ url: WELCOME_URL });
+    }
+  });
+});
