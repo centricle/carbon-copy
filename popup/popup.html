@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Carbon Copy</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <h1>Carbon Copy</h1>
+    <a href="https://github.com/centricle/carbon-copy" target="_blank" rel="noopener" class="help-link" title="About / Source">?</a>
+  </header>
+
+  <section id="site" aria-live="polite">
+    <div class="site-row">
+      <span id="site-host" class="host"></span>
+      <span id="site-state" class="state"></span>
+    </div>
+    <button id="site-toggle" hidden></button>
+  </section>
+
+  <section>
+    <h2>Recent</h2>
+    <ol id="records"></ol>
+    <p id="empty" class="muted" hidden>Nothing yet. Fill in a form on a recorded site and it shows up here.</p>
+  </section>
+
+  <footer>
+    <label><input type="checkbox" id="eeo"> Record EEO self-ID answers</label>
+    <button id="export">Export all (JSON)</button>
+    <p id="msg" class="muted" aria-live="polite"></p>
+  </footer>
+
+  <template id="row">
+    <li>
+      <div class="title"></div>
+      <div class="meta">
+        <span class="when"></span>
+        <span class="badge"></span>
+        <button class="save" type="button">Save files</button>
+      </div>
+    </li>
+  </template>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
