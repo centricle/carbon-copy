@@ -94,7 +94,8 @@ Braintrust.
 Anywhere else: open the popup on that site and choose **Record this site**.
 Chrome asks for permission for that one site, and only that site. **Stop
 recording this site** takes effect at once, in tabs already open on that site
-too.
+too. Setting Chrome's site access for Carbon Copy to "On all sites" does not
+make it record everywhere: it records only on sites added one at a time.
 
 ## Install
 

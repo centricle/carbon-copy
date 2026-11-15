@@ -4,7 +4,7 @@
 import { buildRecord, mergeSteps, STATUS } from '../lib/record.js';
 import * as store from '../lib/store.js';
 import { writeRecord, writeExport } from '../lib/sink-downloads.js';
-import { isCovered } from '../lib/coverage.js';
+import { isCovered, concreteOrigins } from '../lib/coverage.js';
 import { createSubmitGate, fingerprint } from '../lib/throttle.js';
 
 // If the page vanishes mid-submit (a native form navigating away), the
@@ -100,8 +100,7 @@ async function handle(msg, sender) {
       // "Stop recording this site" cannot unload a script already running
       // in an open tab, so its snapshots stop here instead. Anything that
       // is not a frame on a covered site (an extension page, say) too.
-      const contains = origin => chrome.permissions.contains({ origins: [origin] });
-      if (!(await isCovered(sender.url, STATIC_MATCHES, contains))) return null;
+      if (!(await isCovered(sender.url, STATIC_MATCHES, isGranted))) return null;
       const key = sessionKey(sender);
       if (msg.status === 'draft') return upsert(key, msg.snapshot, STATUS.DRAFT, msg.trigger);
       if (msg.status === 'submitted') {
@@ -178,9 +177,22 @@ chrome.tabs.onRemoved.addListener(tabId => {
 // localhost, and that must not be re-registered as an "added" site.
 const STATIC_MATCHES = chrome.runtime.getManifest().content_scripts.flatMap(c => c.matches);
 
+// Sites added with "Record this site", and nothing broader: a wildcard grant
+// (Chrome's "On all sites") is ignored here and in isGranted, so it can
+// neither register the content script everywhere nor make every site count
+// as covered.
+const addedSites = origins => concreteOrigins(origins).filter(o => !STATIC_MATCHES.includes(o));
+
+// An exact grant of the site's pattern, not permissions.contains(), which
+// a wildcard grant would satisfy for every site.
+async function isGranted(pattern) {
+  const { origins = [] } = await chrome.permissions.getAll();
+  return concreteOrigins(origins).includes(pattern);
+}
+
 async function reconcileOptionalSites() {
   const { origins = [] } = await chrome.permissions.getAll();
-  const extra = origins.filter(o => !STATIC_MATCHES.includes(o));
+  const extra = addedSites(origins);
   const existing = await chrome.scripting.getRegisteredContentScripts({ ids: [OPTIONAL_SCRIPT_ID] });
   if (existing.length) await chrome.scripting.unregisterContentScripts({ ids: [OPTIONAL_SCRIPT_ID] });
   if (!extra.length) return [];
@@ -209,7 +221,7 @@ async function injectOpenTabs(origins) {
 chrome.permissions.onAdded.addListener(({ origins = [] }) => {
   enqueue(async () => {
     await reconcileOptionalSites();
-    await injectOpenTabs(origins.filter(o => !STATIC_MATCHES.includes(o)));
+    await injectOpenTabs(addedSites(origins));
   });
 });
 chrome.permissions.onRemoved.addListener(() => enqueue(reconcileOptionalSites));

@@ -9,7 +9,7 @@ import { renderMarkdown, heading } from '../src/lib/render-md.js';
 import { basename, slug, landedWhereAsked } from '../src/lib/sink-downloads.js';
 import { mergeSteps, isSafelySaved, buildRecord, LIMITS } from '../src/lib/record.js';
 import { createSubmitGate, fingerprint } from '../src/lib/throttle.js';
-import { isCovered } from '../src/lib/coverage.js';
+import { isCovered, concreteOrigins } from '../src/lib/coverage.js';
 
 const manifest = JSON.parse(await readFile(new URL('../manifest.json', import.meta.url), 'utf8'));
 
@@ -118,6 +118,15 @@ test('isCovered: manifest matches, granted sites, nothing else', async () => {
   assert.ok(!(await isCovered('chrome-extension://abc/popup/popup.html', MATCHES, async () => true)));
   assert.ok(!(await isCovered('about:blank', MATCHES, async () => true)));
   assert.ok(!(await isCovered(undefined, MATCHES, async () => true)));
+});
+
+test('concreteOrigins: a wildcard grant is not a site', () => {
+  assert.deepEqual(
+    concreteOrigins(['https://*/*', '<all_urls>', '*://*/*', 'http://*/*', 'https://*.com/*',
+      'https://acme.example/*', 'https://*.acme.example/*']),
+    ['https://acme.example/*', 'https://*.acme.example/*'],
+  );
+  assert.deepEqual(concreteOrigins(undefined), []);
 });
 
 test('submit gate: one per tab and site per interval, no repeats', async () => {

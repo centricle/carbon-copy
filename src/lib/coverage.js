@@ -11,8 +11,21 @@ import { matchesPattern } from '../presets/jobs.js';
 // The pattern "Record this site" requests: scheme and hostname, no port.
 export const sitePattern = u => `${u.protocol}//${u.hostname}/*`;
 
-// contains: pattern -> Promise<boolean>, chrome.permissions.contains in the
-// service worker, a stub in the unit tests.
+// Granted patterns that name a site. Chrome's "On all sites" site access
+// grants the whole optional_host_permissions pattern (https://*/*), and that
+// is not a site anyone chose to record: banking and mail would get the
+// content script too. So a host of "*", or "*." over a single label
+// ("*.com"), never counts, and neither does <all_urls>. Recording stays
+// limited to sites added one at a time.
+export function concreteOrigins(origins = []) {
+  return origins.filter(o => {
+    const m = /^[a-z*]+:\/\/([^/]+)\//i.exec(o);
+    return !!m && m[1] !== '*' && !/^\*\.[^.]+$/.test(m[1]);
+  });
+}
+
+// contains: pattern -> Promise<boolean>, an exact concrete grant in the
+// service worker (isGranted), a stub in the unit tests.
 export async function isCovered(url, staticMatches, contains) {
   let u;
   try { u = new URL(url); } catch { return false; }

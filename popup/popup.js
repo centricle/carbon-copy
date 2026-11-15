@@ -2,6 +2,7 @@ import * as store from '../src/lib/store.js';
 import { heading } from '../src/lib/render-md.js';
 import { isSafelySaved } from '../src/lib/record.js';
 import { MATCHES, matchesPattern } from '../src/presets/jobs.js';
+import { concreteOrigins } from '../src/lib/coverage.js';
 
 const $ = id => document.getElementById(id);
 
@@ -44,7 +45,11 @@ async function renderSite() {
     return;
   }
   const origin = `https://${u.hostname}/*`;
-  const granted = await chrome.permissions.contains({ origins: [origin] });
+  // An exact grant, as the service worker counts it. A wildcard grant
+  // (Chrome's "On all sites") would satisfy permissions.contains() for any
+  // site, and Carbon Copy records on none of them through it.
+  const concrete = async () => concreteOrigins((await chrome.permissions.getAll()).origins).includes(origin);
+  const granted = await concrete();
   state.textContent = granted ? 'recording' : 'not recording';
   state.classList.toggle('on', granted);
   btn.hidden = false;
@@ -55,7 +60,13 @@ async function renderSite() {
     const ok = granted
       ? await chrome.permissions.remove({ origins: [origin] })
       : await chrome.permissions.request({ origins: [origin] });
-    if (ok && !granted) say('Recording. Fields you fill in on this site from now on are kept.');
+    if (ok && !granted) {
+      // A request can succeed without leaving an exact grant, when a
+      // wildcard grant already covered it. That records nothing.
+      say(await concrete()
+        ? 'Recording. Fields you fill in on this site from now on are kept.'
+        : 'Chrome\'s site access for Carbon Copy is set to "On all sites", which it does not record through. Set it to "On specific sites" in chrome://extensions, then try again.');
+    }
     renderSite();
   };
 }
