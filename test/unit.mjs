@@ -298,6 +298,23 @@ test('isSafelySaved: only submissions with both files where they belong', () => 
   assert.ok(!isSafelySaved({ status: 'submitted', sink: { ...ok, warning: 'symlink' } }));
 });
 
+test('store: an aborted transaction rejects instead of hanging', async () => {
+  // A fake IndexedDB whose every transaction aborts with no error event,
+  // the way a quota failure does.
+  const db = {
+    transaction() {
+      const t = { objectStore: () => ({ put: () => ({}), get: () => ({}) }) };
+      setTimeout(() => { t.error = new DOMException('Quota exceeded', 'QuotaExceededError'); t.onabort?.(); });
+      return t;
+    },
+  };
+  globalThis.indexedDB = { open() { const req = { result: db }; setTimeout(() => req.onsuccess()); return req; } };
+  const store = await import('../src/lib/store.js');
+  const hung = new Promise(resolve => setTimeout(() => resolve('hung'), 500));
+  const outcome = await Promise.race([store.put({ id: 'x' }).then(() => 'resolved', e => e.name), hung]);
+  assert.equal(outcome, 'QuotaExceededError');
+});
+
 test('mergeSteps keeps earlier steps, drops vanished same-step fields', () => {
   const prior = { fields: [
     { label: 'Name', name: 'name', type: 'text', display: 'W', step: 1 },

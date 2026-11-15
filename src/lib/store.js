@@ -26,6 +26,11 @@ async function tx(mode, fn) {
     const req = fn(t.objectStore(STORE));
     t.oncomplete = () => resolve(req?.result);
     t.onerror = () => reject(t.error);
+    // A transaction can abort with no error event first: running out of
+    // quota does that (there is no unlimitedStorage permission). Without
+    // this the promise never settles, and the service worker's one-at-a-time
+    // queue stalls behind it.
+    t.onabort = () => reject(t.error || new DOMException('Transaction aborted', 'AbortError'));
   });
 }
 
