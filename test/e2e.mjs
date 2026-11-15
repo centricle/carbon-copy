@@ -452,6 +452,25 @@ const cases = {
     assert.deepEqual(errors, []);
   },
 
+  // The SW stores snapshots only from frames on a covered site. "Stop
+  // recording this site" relies on it (the script in an open tab keeps
+  // running), and so does any sender that is not a page at all. The
+  // fixture server is http, so this cannot grant and revoke a real site;
+  // the unit test covers that transition in isCovered.
+  async 'uncovered-sender'() {
+    const snapshot = {
+      fields: [{ label: 'Full name', name: 'n', type: 'text', value: 'Road Runner', display: 'Road Runner', step: 1 }],
+      files: [], redacted: { secret: 0, eeo: 0 }, takenAt: new Date().toISOString(),
+      page: { url: 'https://uncovered.example/apply', title: 'Uncovered', frameUrl: 'https://uncovered.example/apply', origin: 'https://uncovered.example' },
+      meta: {},
+    };
+    const before = (await records()).length;
+    const res = await ext.evaluate(s => chrome.runtime.sendMessage({ type: 'cc:snapshot', status: 'submitted', trigger: 'submit', snapshot: s }), snapshot);
+    assert.ok(res.ok, res.error);
+    assert.equal(res.record, null, 'snapshot from an uncovered sender was stored');
+    assert.equal((await records()).length, before);
+  },
+
   // Runs last: it swaps the download folder for a symlink. Chrome never
   // writes through one. Seen so far, depending on circumstances: it saves
   // "download.md" at the top of the download folder and reports success

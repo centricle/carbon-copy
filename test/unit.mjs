@@ -8,6 +8,7 @@ import { MATCHES, extractContext, matchesPattern, isPresetUrl } from '../src/pre
 import { renderMarkdown, heading } from '../src/lib/render-md.js';
 import { basename, slug, landedWhereAsked } from '../src/lib/sink-downloads.js';
 import { mergeSteps, isSafelySaved } from '../src/lib/record.js';
+import { isCovered } from '../src/lib/coverage.js';
 
 const manifest = JSON.parse(await readFile(new URL('../manifest.json', import.meta.url), 'utf8'));
 
@@ -103,6 +104,19 @@ test('landedWhereAsked: POSIX and Windows paths, uniquified names, symlink fallo
   assert.ok(!landedWhereAsked('/Users/wile/Downloads/download.md', asked), 'symlinked folder: Chrome saves download.md at the top');
   assert.ok(!landedWhereAsked('C:\\Users\\wile\\Downloads\\download.md', asked));
   assert.ok(!landedWhereAsked('', asked));
+});
+
+test('isCovered: manifest matches, granted sites, nothing else', async () => {
+  const granted = new Set(['https://acme.example/*']);
+  const contains = async p => granted.has(p);
+  assert.ok(await isCovered('https://boards.greenhouse.io/acme/jobs/1', MATCHES, contains));
+  assert.ok(await isCovered('https://acme.example/careers/apply', MATCHES, contains));
+  assert.ok(await isCovered('https://acme.example:8443/apply', MATCHES, contains), 'port ignored, like the grant');
+  granted.delete('https://acme.example/*'); // Stop recording this site
+  assert.ok(!(await isCovered('https://acme.example/careers/apply', MATCHES, contains)));
+  assert.ok(!(await isCovered('chrome-extension://abc/popup/popup.html', MATCHES, async () => true)));
+  assert.ok(!(await isCovered('about:blank', MATCHES, async () => true)));
+  assert.ok(!(await isCovered(undefined, MATCHES, async () => true)));
 });
 
 test('isSafelySaved: only submissions with both files where they belong', () => {

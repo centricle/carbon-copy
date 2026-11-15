@@ -4,6 +4,7 @@
 import { buildRecord, mergeSteps, STATUS } from '../lib/record.js';
 import * as store from '../lib/store.js';
 import { writeRecord, writeExport } from '../lib/sink-downloads.js';
+import { isCovered } from '../lib/coverage.js';
 
 // If the page vanishes mid-submit (a native form navigating away), the
 // content script never gets to say whether the submit went through. Leaving
@@ -85,6 +86,11 @@ async function sink(record) {
 async function handle(msg, sender) {
   switch (msg?.type) {
     case 'cc:snapshot': {
+      // "Stop recording this site" cannot unload a script already running
+      // in an open tab, so its snapshots stop here instead. Anything that
+      // is not a frame on a covered site (an extension page, say) too.
+      const contains = origin => chrome.permissions.contains({ origins: [origin] });
+      if (!(await isCovered(sender.url, STATIC_MATCHES, contains))) return null;
       const key = sessionKey(sender);
       if (msg.status === 'draft') return upsert(key, msg.snapshot, STATUS.DRAFT, msg.trigger);
       if (msg.status === 'submitted') {

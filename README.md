@@ -93,8 +93,8 @@ Braintrust.
 
 Anywhere else: open the popup on that site and choose **Record this site**.
 Chrome asks for permission for that one site, and only that site. **Stop
-recording this site** applies to pages you open afterward, so reload any tab
-already open on that site.
+recording this site** takes effect at once, in tabs already open on that site
+too.
 
 ## Install
 
@@ -144,6 +144,7 @@ localhost; only the test copy does.
 | `src/lib/redact.js` | The never-record rules |
 | `src/background/sw.js` | Sessions, submit confirmation, storage, disk |
 | `src/lib/record.js` | The record schema |
+| `src/lib/coverage.js` | Which frames may be recorded (presets, granted sites) |
 | `src/lib/render-md.js` | Record to Markdown |
 | `src/lib/sink-downloads.js` | Writes the files via `chrome.downloads` |
 | `src/presets/jobs.js` | Job-site hosts, and company/role from their URLs |
