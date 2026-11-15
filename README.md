@@ -167,6 +167,7 @@ npm run test:e2e -- --headed --only=multistep
 npm run fixtures         # serve the test forms on http://localhost:7072
 npm run build:test       # tmp/test-extension: a copy that also records on localhost
 npm run package          # carbon-copy.zip, exactly the files that ship
+npm run store-assets     # tmp/store: Web Store screenshots, from the test build
 ```
 
 The end-to-end suite loads the extension into Playwright's Chromium, fills in

@@ -13,7 +13,8 @@
     "fixtures": "node test/serve.mjs",
     "build:test": "node test/test-extension.mjs",
     "package": "node scripts/package.mjs",
-    "icons": "node scripts/icons.mjs"
+    "icons": "node scripts/icons.mjs",
+    "store-assets": "node scripts/store-assets.mjs"
   },
   "devDependencies": {
     "playwright": "~1.62.1"
