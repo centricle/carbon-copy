@@ -1,0 +1,21 @@
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Claude
+.claude/
+
+# npm (Playwright is the only dependency, dev-only)
+node_modules/
+
+# Build artifacts
+*.zip
+test-results/
+
+# Scratch (test builds land in tmp/test-extension)
+tmp/
