@@ -399,6 +399,12 @@
       // Filled by you and hidden since: an earlier step of a single-page
       // form. Keep that.
       if (!isRendered(el) && el.tagName !== 'IFRAME' && (display === '' || !isEdited)) continue;
+      // A card number, SSN or IBAN typed into a field whose label gave no
+      // warning. Never sent on, and never counts as filling in the form.
+      if (R.secretValue(el, label, value) || (display !== value && R.secretValue(el, label, display))) {
+        redacted.secret++;
+        continue;
+      }
       if (isEdited && display !== '') userFilled = true;
       fields.push({ label, name, type, value, display });
     }

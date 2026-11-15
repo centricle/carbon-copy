@@ -321,6 +321,40 @@ const cases = {
     await assertOnDisk(rec);
   },
 
+  // Bank, tax, ID and birth-date answers, by label and by value, next to
+  // decoys that look alike. Checked in the files on disk, not the record.
+  async 'sensitive'(page) {
+    const secrets = {
+      '#bank': '000123456789', '#routing': '011000015', '#iban': 'GB82 WEST 1234 5698 7654 32',
+      '#ein': '98-7654321', '#dob': '1949-09-17', '#passport': 'C03005988', '#license': 'D123-4567-8901',
+      '#ref': '219-09-9999', '#other': '4012 8888 8888 1881', '#memo': 'DE89 3704 0044 0532 0130 00',
+    };
+    const decoys = {
+      '#name': 'Wile E. Coyote', '#tel': '612 345 678', '#phone': '600 100 200', '#zip': '85001-1234',
+      '#swift': '6', '#order': '1234567890123',
+      '#cover': 'Invoice 5555 5555 5555 4444 arrived crushed. Frankly, again.',
+    };
+    await page.goto(`${base}/fixtures/sensitive.html`);
+    for (const [sel, v] of Object.entries({ ...secrets, ...decoys })) await page.fill(sel, v);
+    await page.selectOption('#bmonth', '9');
+    await page.check('input[name="has_passport"][value="yes"]');
+    await Promise.all([page.waitForURL('**/submit'), page.click('button[type="submit"]')]);
+    const rec = await submittedFor('sensitive.html');
+    await assertOnDisk(rec);
+
+    const onDisk = (await readFile(rec.sink.md, 'utf8')) + (await readFile(rec.sink.json, 'utf8'));
+    for (const v of [...Object.values(secrets), 'September']) {
+      for (const form of new Set([v, v.replace(/[\s-]/g, '')])) assert.ok(!onDisk.includes(form), `secret on disk: ${form}`);
+    }
+    for (const v of Object.values(decoys)) assert.ok(onDisk.includes(JSON.stringify(v).slice(1, -1)), `decoy missing: ${v}`);
+    assert.equal(rec.fields.map(f => f.label).join(' | '), [
+      'Full name', 'Contact', 'Phone', 'ZIP code', 'Years with Swift?', 'Last ACME order number',
+      'Do you have a valid passport?', 'Cover letter',
+    ].join(' | '));
+    assert.equal(byLabel(rec)['Do you have a valid passport?'].display, 'Yes');
+    assert.equal(rec.redacted.secret, 11);
+  },
+
   // Page scripts that try to make records nobody submitted: a forged drop,
   // a scripted click on Send, a synthetic submit event, then a
   // requestSubmit() loop (trusted events, so only the SW gate stops it).

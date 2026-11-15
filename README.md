@@ -61,13 +61,23 @@ Skipped before anything leaves the page:
 - password fields, and fields marked as passwords or one-time codes
 - fields marked `autocomplete="cc-*"`, or labeled or named as a card number
   or CVV
-- fields labeled or named as a Social Security or social insurance number
+- fields labeled or named as a Social Security or social insurance number,
+  a bank account, routing number, IBAN, SWIFT/BIC or sort code, or a tax ID
+  (TIN, EIN, ITIN)
+- date of birth, by label, name or `autocomplete="bday"`
+- the number typed into a passport, driver's license or national ID field. A
+  yes/no question such as "Do you have a valid passport?" is kept.
+- any answer that is, in its entirety, a card number (13 to 19 digits passing
+  the Luhn check), a nine-digit number (the shape of an SSN or a routing
+  number) or a valid IBAN, whatever the field is called. Phone and
+  postal-code fields are exempt, and so is text that only mentions a number.
 - `type="hidden"` inputs, captcha response tokens, and any field hidden with
   CSS that holds a value the page wrote rather than you
 
 These rules read each field's type, `autocomplete` attribute, label and name,
-never its value. A sensitive answer in a field with an ordinary label, such as
-a bank account number, is recorded like any other answer. The same rules,
+and the shape of its whole value. They are a safety net, not a guarantee: a
+secret written in words, or a number in a shape they do not know, is recorded
+like any other answer. The same rules,
 and the EEO setting below, cover file uploads, judged by the label of the
 input or drop zone: a file attached as a Social Security card is not
 recorded at all, name and hash included. A field hidden with CSS is kept if

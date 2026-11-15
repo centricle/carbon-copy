@@ -11,6 +11,22 @@ import { mergeSteps, isSafelySaved, buildRecord, LIMITS } from '../src/lib/recor
 import { createSubmitGate, fingerprint } from '../src/lib/throttle.js';
 import { isCovered, concreteOrigins } from '../src/lib/coverage.js';
 
+// redact.js is a classic script for the content script: it sets a global.
+await import('../src/lib/redact.js');
+const R = globalThis.CarbonCopyRedact;
+
+// Just enough of an element for redact.js: attributes, tag, no ancestors
+// unless a legend is given.
+function el({ tag = 'INPUT', legend = null, ...attrs } = {}) {
+  return {
+    tagName: tag,
+    id: attrs.id || '',
+    getAttribute: k => attrs[k] ?? null,
+    parentElement: null,
+    closest: () => legend && { tagName: 'FIELDSET', getAttribute: () => null, querySelector: () => ({ textContent: legend }) },
+  };
+}
+
 const manifest = JSON.parse(await readFile(new URL('../manifest.json', import.meta.url), 'utf8'));
 
 test('preset MATCHES equals the manifest content_scripts matches', () => {
@@ -85,7 +101,7 @@ test('renderMarkdown', () => {
   assert.ok(md.includes('## First name\n\nWile E.\n'));
   assert.ok(md.includes('## Anything else?\n\n_(blank)_\n'));
   assert.ok(md.includes('- **Resume/CV**: `resume.pdf`, 2.0 KB, application/pdf'));
-  assert.ok(md.includes('1 sensitive field (passwords, card numbers, SSN) never recorded'));
+  assert.ok(md.includes('1 sensitive field (passwords, card, bank and ID numbers, date of birth) never recorded'));
   assert.ok(md.includes('4 EEO self-ID fields skipped'));
   assert.ok(!md.includes('*Step'), 'no step markers for a one-step form');
   assert.equal(heading({ ...record, context: {} }), 'Apply "now"');
@@ -127,6 +143,49 @@ test('concreteOrigins: a wildcard grant is not a site', () => {
     ['https://acme.example/*', 'https://*.acme.example/*'],
   );
   assert.deepEqual(concreteOrigins(undefined), []);
+});
+
+test('secretReason: bank, tax, ID and birth-date labels and names', () => {
+  const secret = [
+    ['Bank account number'], ['Account #'], ['Routing number'], ['ABA routing number'], ['IBAN'],
+    ['SWIFT/BIC code'], ['BIC'], ['Sort code'], ['Tax ID'], ['Taxpayer identification number'],
+    ['Employer Identification Number'], ['TIN'], ['Federal EIN'], ['ITIN'], ['Date of birth'],
+    ['Birth date'], ['Birthday'], ['DOB'], ['Passport number'], ['Driver’s license'],
+    ['Driving licence number'], ['National Insurance number'], ['National ID'],
+  ];
+  for (const [label] of secret) assert.ok(R.secretReason(el(), label), `kept: ${label}`);
+  for (const name of ['routingNumber', 'applicant[dob]', 'bank_account', 'iban', 'tax-id', 'dateOfBirth', 'passport_no'])
+    assert.ok(R.secretReason(el({ name }), 'Field'), `kept name: ${name}`);
+  assert.ok(R.secretReason(el({ id: 'ssn' }), 'Field'), 'id checked, not only name');
+  for (const id of ['swift', 'routing']) assert.equal(R.secretReason(el({ id }), 'Years with it?'), null, `bare id ${id}`);
+  assert.ok(R.secretReason(el({ autocomplete: 'bday-year' }), 'Year'));
+  assert.ok(R.secretReason(el({ tag: 'SELECT', legend: 'Date of birth' }), 'Month'), 'DOB split into selects');
+
+  const kept = [
+    'Years with Swift?', 'ABA therapy experience', 'Geben Sie ein Beispiel', 'Tin can design portfolio',
+    'Network routing experience', 'Your Account Manager', 'Birthplace of the company?',
+  ];
+  for (const label of kept) assert.equal(R.secretReason(el(), label), null, `dropped: ${label}`);
+  // Identity documents count on free text only.
+  assert.equal(R.secretReason(el({ type: 'radio', name: 'passport' }), 'Do you have a valid passport?'), null);
+  assert.equal(R.secretReason(el({ tag: 'SELECT' }), 'Do you hold a driver\'s license?'), null);
+  assert.ok(R.secretReason(el({ tag: 'TEXTAREA' }), 'Passport'));
+});
+
+test('secretValue: card, SSN, routing and IBAN values, not decoys', () => {
+  const plain = el({ type: 'text' });
+  for (const v of ['4111 1111 1111 1111', '4012-8888-8888-1881', '078-05-1120', '011000015', 'GB82 WEST 1234 5698 7654 32', ' DE89370400440532013000 '])
+    assert.ok(R.secretValue(plain, 'Anything else?', v), `kept: ${v}`);
+  assert.equal(R.secretValue(el({ type: 'tel' }), 'Contact', '612 345 678'), null, 'tel field');
+  assert.equal(R.secretValue(plain, 'Phone', '612 345 678'), null, 'phone label');
+  assert.equal(R.secretValue(plain, 'ZIP code', '85001-1234'), null, 'ZIP+4');
+  assert.equal(R.secretValue(el({ autocomplete: 'postal-code' }), 'Code', '850011234'), null);
+  assert.equal(R.secretValue(plain, 'Years with Swift?', '6'), null);
+  assert.equal(R.secretValue(plain, 'Order number', '1234567890123'), null, '13 digits failing Luhn');
+  assert.equal(R.secretValue(plain, 'IBAN-ish', 'GB82 WEST 1234 5698 7654 33'), null, 'bad IBAN checksum');
+  assert.equal(R.secretValue(el({ tag: 'TEXTAREA' }), 'Cover letter',
+    'I have shipped 4111 1111 1111 1111 anvils and 078-05-1120 rockets.'), null, 'prose that mentions a number');
+  assert.equal(R.secretValue(plain, 'Rate', ['011000015']), null, 'arrays are not checked');
 });
 
 test('submit gate: one per tab and site per interval, no repeats', async () => {

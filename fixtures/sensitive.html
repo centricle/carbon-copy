@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Payroll Coyote - ACME Corporation</title>
+  <meta property="og:site_name" content="ACME Corporation">
+  <link rel="stylesheet" href="fixtures.css">
+</head>
+<body>
+  <h1>Payroll Coyote</h1>
+  <p>Bank, tax, identity and birth-date fields, plus secrets typed into
+  fields with ordinary labels. Next to each kind, a decoy that must be kept.</p>
+
+  <form action="/submit" method="post">
+    <label for="name">Full name</label>
+    <input id="name" name="name">
+
+    <!-- Named secrets: the label gives them away. -->
+    <label for="bank">Bank account number</label>
+    <input id="bank" name="q_101">
+
+    <label for="routing">Routing number</label>
+    <input id="routing" name="q_102">
+
+    <label for="iban">IBAN</label>
+    <input id="iban" name="q_103">
+
+    <label for="ein">Tax ID (EIN)</label>
+    <input id="ein" name="q_104">
+
+    <label for="dob">Date of birth</label>
+    <input id="dob" name="q_105" type="date">
+
+    <label for="passport">Passport number</label>
+    <input id="passport" name="q_106">
+
+    <label for="license">Driver's license</label>
+    <input id="license" name="q_107">
+
+    <fieldset>
+      <legend>Birth date</legend>
+      <label for="bmonth">Month</label>
+      <select id="bmonth" name="q_108">
+        <option value="">Month</option>
+        <option value="9">September</option>
+      </select>
+    </fieldset>
+
+    <!-- Unnamed secrets: only the value gives them away. -->
+    <label for="ref">Referral code</label>
+    <input id="ref" name="q_201">
+
+    <label for="other">Anything else?</label>
+    <input id="other" name="q_202">
+
+    <label for="memo">Memo</label>
+    <input id="memo" name="q_203">
+
+    <!-- Decoys: all kept. -->
+    <label for="tel">Contact</label>
+    <input id="tel" name="q_301" type="tel">
+
+    <label for="phone">Phone</label>
+    <input id="phone" name="q_302">
+
+    <label for="zip">ZIP code</label>
+    <input id="zip" name="q_303">
+
+    <label for="swift">Years with Swift?</label>
+    <input id="swift" name="q_304">
+
+    <label for="order">Last ACME order number</label>
+    <input id="order" name="q_305">
+
+    <fieldset>
+      <legend>Do you have a valid passport?</legend>
+      <label><input type="radio" name="has_passport" value="yes"> Yes</label>
+      <label><input type="radio" name="has_passport" value="no"> No</label>
+    </fieldset>
+
+    <label for="cover">Cover letter</label>
+    <textarea id="cover" name="q_306"></textarea>
+
+    <button type="submit">Submit application</button>
+  </form>
+</body>
+</html>

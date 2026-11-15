@@ -15,10 +15,15 @@ While you fill in a form, Carbon Copy keeps a draft of it in the browser, so
 an unsent application is stored too.
 
 It skips password fields, fields marked as one-time codes, and fields marked
-or labeled as payment card details or a Social Security or social insurance
-number. It recognizes these by each field's type, `autocomplete` attribute,
-label and name, not by what you typed, so a sensitive answer in a field with
-an ordinary label is stored like any other. EEO self-identification answers
+or labeled as payment card details, bank details, a tax ID, a Social Security
+or social insurance number, or a date of birth, plus the number typed into a
+passport, driver's license or national ID field. It recognizes these by each
+field's type, `autocomplete` attribute, label and name. It also skips any
+answer that is, in its entirety, a card number, a nine-digit number such as an
+SSN or routing number, or an IBAN, whatever the field is called; phone and
+postal-code fields are exempt. These rules are a safety net: a sensitive
+answer in a shape they do not recognize, such as one written out in words, is
+stored like any other. EEO self-identification answers
 are not stored unless you turn that on in the popup. Both rules apply to
 attached files too, judged by the label of the field or drop zone the file
 went into: a skipped file's name and hash are not stored.

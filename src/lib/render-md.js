@@ -59,7 +59,7 @@ export function renderMarkdown(record) {
 
   const notes = [];
   const r = record.redacted || {};
-  if (r.secret) notes.push(`${r.secret} sensitive field${r.secret === 1 ? '' : 's'} (passwords, card numbers, SSN) never recorded`);
+  if (r.secret) notes.push(`${r.secret} sensitive field${r.secret === 1 ? '' : 's'} (passwords, card, bank and ID numbers, date of birth) never recorded`);
   if (r.eeo) notes.push(`${r.eeo} EEO self-ID field${r.eeo === 1 ? '' : 's'} skipped (off by default)`);
   lines.push('---', '', `Recorded by Carbon Copy.${notes.length ? ' ' + notes.join('; ') + '.' : ''}`, '');
   return lines.join('\n');
