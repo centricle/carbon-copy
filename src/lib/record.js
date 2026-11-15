@@ -7,6 +7,35 @@ import { extractContext } from '../presets/jobs.js';
 export const SCHEMA = 1;
 export const STATUS = Object.freeze({ DRAFT: 'draft', SUBMITTED: 'submitted' });
 
+// Bounds on what one record can hold. No real application comes near them;
+// they exist so a page cannot bloat the store or the files (a field holding
+// megabytes, ten thousand fields). A clipped field says so.
+export const LIMITS = Object.freeze({ fields: 500, files: 100, chars: 100_000, label: 500 });
+
+function clip(v, max = LIMITS.chars, cut = () => {}) {
+  if (typeof v === 'string' && v.length > max) { cut(); return v.slice(0, max); }
+  if (Array.isArray(v)) {
+    if (v.length > LIMITS.fields) cut();
+    return v.slice(0, LIMITS.fields).map(x => clip(x, max, cut));
+  }
+  return v;
+}
+
+function clipField(f) {
+  let clipped = false;
+  const cut = () => { clipped = true; };
+  const out = {
+    label: clip(f.label, LIMITS.label, cut),
+    name: clip(f.name ?? null, LIMITS.label, cut),
+    type: clip(f.type, LIMITS.label),
+    value: clip(f.value, LIMITS.chars, cut),
+    display: clip(f.display, LIMITS.chars, cut),
+    step: f.step ?? 1,
+  };
+  if (clipped) out.clipped = true;
+  return out;
+}
+
 // snapshot: what the content script sent (see src/content/capture.js)
 // prior:    the existing record for this session, if any
 export function buildRecord({ snapshot, status, trigger, prior = null }) {
@@ -27,19 +56,12 @@ export function buildRecord({ snapshot, status, trigger, prior = null }) {
     page,
     context: { company: ctx.company, role: ctx.role },
     preset: ctx.preset,
-    fields: snapshot.fields.map(f => ({
-      label: f.label,
-      name: f.name ?? null,
-      type: f.type,
-      value: f.value,
-      display: f.display,
-      step: f.step ?? 1,
-    })),
-    files: snapshot.files.map(f => ({
-      label: f.label,
-      name: f.name,
+    fields: snapshot.fields.slice(0, LIMITS.fields).map(clipField),
+    files: snapshot.files.slice(0, LIMITS.files).map(f => ({
+      label: clip(f.label, LIMITS.label),
+      name: clip(f.name, LIMITS.label),
       size: f.size,
-      type: f.type,
+      type: clip(f.type, LIMITS.label),
       sha256: f.sha256,
     })),
     redacted: snapshot.redacted || { secret: 0, eeo: 0 },

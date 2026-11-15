@@ -7,7 +7,7 @@ import { readFile } from 'node:fs/promises';
 import { MATCHES, extractContext, matchesPattern, isPresetUrl } from '../src/presets/jobs.js';
 import { renderMarkdown, heading } from '../src/lib/render-md.js';
 import { basename, slug, landedWhereAsked } from '../src/lib/sink-downloads.js';
-import { mergeSteps, isSafelySaved } from '../src/lib/record.js';
+import { mergeSteps, isSafelySaved, buildRecord, LIMITS } from '../src/lib/record.js';
 import { createSubmitGate, fingerprint } from '../src/lib/throttle.js';
 import { isCovered } from '../src/lib/coverage.js';
 
@@ -135,6 +135,25 @@ test('submit gate: one per tab and site per interval, no repeats', async () => {
   assert.equal(gate('1|https://acme.example', b), null);
   t = 6000 + 600000;
   assert.equal(gate('1|https://acme.example', b), null, 'a repeat after the window goes through');
+});
+
+test('buildRecord clips oversized fields and says so', () => {
+  const big = 'x'.repeat(LIMITS.chars + 10);
+  const snapshot = {
+    takenAt: record.capturedAt,
+    page: record.page,
+    fields: [
+      { label: 'Huge', name: 'h', type: 'textarea', value: big, display: big },
+      { label: 'Fine', name: 'f', type: 'text', value: 'ok', display: 'ok' },
+      ...Array.from({ length: LIMITS.fields }, (_, i) => ({ label: `F${i}`, type: 'text', value: '', display: '' })),
+    ],
+    files: [],
+  };
+  const r = buildRecord({ snapshot, status: 'draft', trigger: 'input' });
+  assert.equal(r.fields.length, LIMITS.fields);
+  assert.equal(r.fields[0].value.length, LIMITS.chars);
+  assert.equal(r.fields[0].clipped, true);
+  assert.equal('clipped' in r.fields[1], false);
 });
 
 test('isSafelySaved: only submissions with both files where they belong', () => {
