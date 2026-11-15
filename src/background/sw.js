@@ -1,0 +1,196 @@
+// Service worker: turns snapshots into records, keys them to a session,
+// stores every one, and writes the submitted ones to disk.
+
+import { buildRecord, mergeSteps, STATUS } from '../lib/record.js';
+import * as store from '../lib/store.js';
+import { writeRecord, writeExport } from '../lib/sink-downloads.js';
+import { MATCHES } from '../presets/jobs.js';
+
+// If the page vanishes mid-submit (a native form navigating away), the
+// content script never gets to say whether the submit went through. Leaving
+// the page right after clicking Submit is the strongest sign it did.
+const PENDING_TIMEOUT_MS = 3000;
+const OPTIONAL_SCRIPT_ID = 'cc-optional-sites';
+const CONTENT_JS = ['src/lib/redact.js', 'src/content/capture.js'];
+
+// ------------------------------------------------------------- sessions
+
+// session key -> record id. In storage.session so a service worker restart
+// mid-application does not split one application into two records; cleared
+// with the browser session, which is the right lifetime for "this tab".
+let sessions = null;
+async function loadSessions() {
+  if (!sessions) sessions = (await chrome.storage.session.get('sessions')).sessions || {};
+  return sessions;
+}
+async function saveSessions() {
+  await chrome.storage.session.set({ sessions });
+}
+
+function sessionKey(sender) {
+  let path = '';
+  try { path = new URL(sender.url).pathname; } catch { /* none */ }
+  return `${sender.tab?.id ?? 'x'}|${sender.origin || ''}|${path}`;
+}
+
+const pending = new Map(); // submitId -> { key, recordId, trigger, timer }
+
+// ------------------------------------------------------------- records
+
+async function upsert(key, snapshot, status, trigger) {
+  await loadSessions();
+  const priorId = sessions[key];
+  let prior = priorId ? await store.get(priorId) : null;
+  if (prior && prior.status === STATUS.SUBMITTED) prior = null; // that one is done; start fresh
+  let record = buildRecord({ snapshot, status, trigger, prior });
+  if (prior) record = mergeSteps(prior, record);
+  await store.put(record);
+  sessions[key] = record.id;
+  await saveSessions();
+  return record;
+}
+
+async function markSubmitted(recordId, trigger, key) {
+  const record = await store.get(recordId);
+  if (!record) return null;
+  record.status = STATUS.SUBMITTED;
+  record.trigger = trigger;
+  await store.put(record);
+  await loadSessions();
+  if (key && sessions[key] === recordId) {
+    delete sessions[key];
+    await saveSessions();
+  }
+  return sink(record);
+}
+
+async function sink(record) {
+  try {
+    record.sink = await writeRecord(record);
+  } catch (err) {
+    let error = String(err.message || err);
+    // USER_CANCELED with no user in sight: a declined "Save as" prompt (Chrome
+    // set to ask where to save each file), or a symlinked folder Chrome
+    // refused to write through.
+    if (error.includes('USER_CANCELED')) {
+      error += `. Chrome may be set to ask where to save each file, or ~/Downloads/carbon-copy may be a symlink (Chrome will not write through one).`;
+    }
+    record.sink = { error, at: new Date().toISOString() };
+  }
+  await store.put(record);
+  return record;
+}
+
+// ------------------------------------------------------------- messages
+
+async function handle(msg, sender) {
+  switch (msg?.type) {
+    case 'cc:snapshot': {
+      const key = sessionKey(sender);
+      if (msg.status === 'draft') return upsert(key, msg.snapshot, STATUS.DRAFT, msg.trigger);
+      if (msg.status === 'submitted') {
+        const record = await upsert(key, msg.snapshot, STATUS.DRAFT, msg.trigger);
+        return markSubmitted(record.id, msg.trigger, key);
+      }
+      if (msg.status === 'pending') {
+        // Stored as a draft until the content script resolves it.
+        const record = await upsert(key, msg.snapshot, STATUS.DRAFT, msg.trigger);
+        const timer = setTimeout(() => {
+          enqueue(async () => {
+            if (!pending.delete(msg.submitId)) return;
+            await markSubmitted(record.id, `${msg.trigger}+unload`, key);
+          });
+        }, PENDING_TIMEOUT_MS);
+        pending.set(msg.submitId, { key, recordId: record.id, trigger: msg.trigger, timer });
+        return record;
+      }
+      return null;
+    }
+    case 'cc:resolve': {
+      const p = pending.get(msg.submitId);
+      if (!p) return null;
+      clearTimeout(p.timer);
+      pending.delete(msg.submitId);
+      if (msg.status === 'submitted') return markSubmitted(p.recordId, msg.trigger || p.trigger, p.key);
+      return store.get(p.recordId); // validation stopped it: stays a draft
+    }
+    case 'cc:redownload': {
+      const record = await store.get(msg.id);
+      return record ? sink(record) : null;
+    }
+    case 'cc:export':
+      return { path: await writeExport(await store.list()) };
+    default:
+      return undefined;
+  }
+}
+
+// One at a time: two snapshots for the same session must not interleave
+// their read-modify-write of the record.
+let chain = Promise.resolve();
+function enqueue(fn) {
+  const run = chain.then(fn);
+  chain = run.catch(err => console.error('[carbon-copy]', err));
+  return run;
+}
+
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (!msg?.type?.startsWith('cc:')) return false;
+  enqueue(() => handle(msg, sender)).then(
+    r => sendResponse({ ok: true, record: r ?? null }),
+    err => sendResponse({ ok: false, error: String(err.message || err) }),
+  );
+  return true;
+});
+
+chrome.tabs.onRemoved.addListener(tabId => {
+  enqueue(async () => {
+    await loadSessions();
+    let changed = false;
+    for (const k of Object.keys(sessions)) if (k.startsWith(`${tabId}|`)) { delete sessions[k]; changed = true; }
+    if (changed) await saveSessions();
+  });
+});
+
+// ------------------------------------------------------------- "Record this site"
+
+// Sites outside the preset get a content script only after the user grants
+// that origin from the popup. Registration lives here, not in the popup,
+// because the permission prompt can close the popup before its promise
+// resolves.
+async function reconcileOptionalSites() {
+  const { origins = [] } = await chrome.permissions.getAll();
+  const extra = origins.filter(o => !MATCHES.includes(o));
+  const existing = await chrome.scripting.getRegisteredContentScripts({ ids: [OPTIONAL_SCRIPT_ID] });
+  if (existing.length) await chrome.scripting.unregisterContentScripts({ ids: [OPTIONAL_SCRIPT_ID] });
+  if (!extra.length) return [];
+  await chrome.scripting.registerContentScripts([{
+    id: OPTIONAL_SCRIPT_ID,
+    matches: extra,
+    js: CONTENT_JS,
+    allFrames: true,
+    runAt: 'document_idle',
+    persistAcrossSessions: true,
+  }]);
+  return extra;
+}
+
+// Pages already open on a newly granted site get the script now, without
+// a reload. capture.js guards against a second injection.
+async function injectOpenTabs(origins) {
+  if (!origins.length) return;
+  const tabs = await chrome.tabs.query({ url: origins });
+  for (const tab of tabs) {
+    chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, files: CONTENT_JS })
+      .catch(() => { /* tab closed or not scriptable */ });
+  }
+}
+
+chrome.permissions.onAdded.addListener(({ origins = [] }) => {
+  enqueue(async () => {
+    await reconcileOptionalSites();
+    await injectOpenTabs(origins.filter(o => !MATCHES.includes(o)));
+  });
+});
+chrome.permissions.onRemoved.addListener(() => enqueue(reconcileOptionalSites));
+chrome.runtime.onInstalled.addListener(() => enqueue(reconcileOptionalSites));
