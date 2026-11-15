@@ -392,6 +392,33 @@ const cases = {
       await rename(real, dir);
     }
   },
+
+  // Last of all: it deletes records. By now the store holds saved
+  // submissions, the draft from 'draft-stays-in-browser', and the record
+  // 'symlink-warning' left with a failed save. Only the saved ones may go.
+  async 'popup-clear'(page) {
+    const files = await readdir(join(downloads, 'carbon-copy'));
+    const before = await records();
+    const isSaved = r => r.status === 'submitted' && r.sink?.md && r.sink?.json && !r.sink.error && !r.sink.warning;
+    const saved = before.filter(isSaved);
+    const keep = before.filter(r => !isSaved(r)).map(r => r.id).sort();
+    assert.ok(saved.length > 0 && keep.length >= 2, `fixture state: ${saved.length} saved, ${keep.length} unsaved`);
+
+    await page.goto(`chrome-extension://${extId}/popup/popup.html`);
+    await page.waitForSelector('#clear:not([hidden])');
+    await page.click('#clear');
+    // The first click reads the store before it relabels, so wait for it.
+    await page.waitForFunction(t => document.getElementById('clear').textContent === t, `Clear ${saved.length} saved?`);
+    assert.equal((await records()).length, before.length, 'first click must not delete');
+    await page.click('#clear');
+    await page.waitForFunction(() => document.getElementById('msg').textContent.startsWith('Cleared'));
+
+    assert.deepEqual((await records()).map(r => r.id).sort(), keep, 'kept exactly the records with no file on disk');
+    assert.equal(await page.locator('#records li').count(), keep.length);
+    assert.ok(await page.isHidden('#clear'), 'Clear still offered with nothing saved left to clear');
+    assert.match(await page.textContent('#msg'), new RegExp(`Kept ${keep.length} not saved to disk`));
+    assert.deepEqual(await readdir(join(downloads, 'carbon-copy')), files, 'clearing touched files on disk');
+  },
 };
 
 // ------------------------------------------------------------------ run

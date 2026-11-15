@@ -59,6 +59,15 @@ button {
 button:hover { border-color: var(--muted); }
 #site-toggle, #export { width: 100%; margin-top: 8px; }
 
+.section-head { display: flex; align-items: baseline; justify-content: space-between; margin: 14px 0 6px; }
+.section-head h2 { margin: 0; }
+button.link {
+  padding: 0; border: none; background: none;
+  color: var(--muted); font-size: 12px; text-decoration: underline;
+}
+button.link:hover { color: var(--fg); }
+button.link.armed { color: var(--bad); font-weight: 600; }
+
 ol { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow-y: auto; }
 li { padding: 7px 0; border-top: 1px solid var(--line); }
 li:first-child { border-top: none; }

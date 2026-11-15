@@ -33,6 +33,9 @@ export const put = record => tx('readwrite', s => s.put(record)).then(() => reco
 export const get = id => tx('readonly', s => s.get(id));
 export const remove = id => tx('readwrite', s => s.delete(id));
 
+// One transaction for many deletes, so a partial clear cannot happen.
+export const removeMany = ids => tx('readwrite', s => { ids.forEach(id => s.delete(id)); return null; });
+
 // Newest first. limit 0 = everything.
 export async function list({ limit = 0, status = null } = {}) {
   const all = await tx('readonly', s => s.index('capturedAt').getAll());

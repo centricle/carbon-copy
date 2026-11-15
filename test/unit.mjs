@@ -7,7 +7,7 @@ import { readFile } from 'node:fs/promises';
 import { MATCHES, extractContext, matchesPattern, isPresetUrl } from '../src/presets/jobs.js';
 import { renderMarkdown, heading } from '../src/lib/render-md.js';
 import { basename, slug } from '../src/lib/sink-downloads.js';
-import { mergeSteps } from '../src/lib/record.js';
+import { mergeSteps, isSafelySaved } from '../src/lib/record.js';
 
 const manifest = JSON.parse(await readFile(new URL('../manifest.json', import.meta.url), 'utf8'));
 
@@ -93,6 +93,16 @@ test('slug and basename', () => {
   assert.equal(slug('Café Société: Anvils & Co.'), 'cafe-societe-anvils-co');
   assert.match(basename(record), /^2026-11-1[56]-acme-corporation-anvil-engineer$/);
   assert.match(basename({ ...record, context: {} }), /-boards-greenhouse-io-apply-now$/);
+});
+
+test('isSafelySaved: only submissions with both files where they belong', () => {
+  const ok = { md: '/d/carbon-copy/a.md', json: '/d/carbon-copy/a.json' };
+  assert.ok(isSafelySaved({ status: 'submitted', sink: ok }));
+  assert.ok(!isSafelySaved({ status: 'draft', sink: null }));
+  assert.ok(!isSafelySaved({ status: 'draft', sink: ok }), 'a re-saved draft is still a draft');
+  assert.ok(!isSafelySaved({ status: 'submitted', sink: null }), 'sink still running');
+  assert.ok(!isSafelySaved({ status: 'submitted', sink: { error: 'USER_CANCELED' } }));
+  assert.ok(!isSafelySaved({ status: 'submitted', sink: { ...ok, warning: 'symlink' } }));
 });
 
 test('mergeSteps keeps earlier steps, drops vanished same-step fields', () => {

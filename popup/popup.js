@@ -1,5 +1,6 @@
 import * as store from '../src/lib/store.js';
 import { heading } from '../src/lib/render-md.js';
+import { isSafelySaved } from '../src/lib/record.js';
 import { MATCHES, matchesPattern } from '../src/presets/jobs.js';
 
 const $ = id => document.getElementById(id);
@@ -84,6 +85,7 @@ async function renderRecords() {
   const list = $('records');
   list.replaceChildren();
   $('empty').hidden = rows.length > 0;
+  $('clear').hidden = !(await store.list()).some(isSafelySaved);
   const tpl = $('row');
   for (const r of rows) {
     const li = tpl.content.firstElementChild.cloneNode(true);
@@ -109,6 +111,37 @@ async function renderRecords() {
   }
 }
 
+// Clears saved submissions from the list. Their files stay in Downloads, and
+// anything that exists only in the browser (drafts, failed saves) stays
+// listed. Two clicks: the first arms it and says how many, the second
+// (within a few seconds) deletes.
+function setupClear() {
+  const btn = $('clear');
+  let timer = null;
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  const disarm = () => {
+    clearTimeout(timer);
+    btn.classList.remove('armed');
+    btn.textContent = 'Clear';
+  };
+  btn.onclick = async () => {
+    const all = await store.list();
+    const saved = all.filter(isSafelySaved);
+    if (!btn.classList.contains('armed')) {
+      btn.classList.add('armed');
+      btn.textContent = `Clear ${saved.length} saved?`;
+      timer = setTimeout(disarm, 4000);
+      return;
+    }
+    disarm();
+    await store.removeMany(saved.map(r => r.id));
+    const kept = all.length - saved.length;
+    say(`Cleared ${plural(saved.length, 'saved record')}; the files stay in Downloads.`
+      + (kept ? ` Kept ${kept} not saved to disk (drafts or failed saves).` : ''));
+    renderRecords();
+  };
+}
+
 // ------------------------------------------------------------- settings
 
 async function renderSettings() {
@@ -132,3 +165,4 @@ async function renderSettings() {
 renderSite();
 renderRecords();
 renderSettings();
+setupClear();

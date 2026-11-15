@@ -48,6 +48,15 @@ export function buildRecord({ snapshot, status, trigger, prior = null }) {
   };
 }
 
+// A record whose files are on disk where they belong, so the browser copy is
+// not the only one. Clear in the popup removes these and nothing else:
+// drafts never reach disk, and a failed or misplaced save has no file in
+// ~/Downloads/carbon-copy/.
+export function isSafelySaved(record) {
+  const s = record.sink;
+  return record.status === STATUS.SUBMITTED && !!s?.md && !!s?.json && !s.error && !s.warning;
+}
+
 const fieldKey = f => `${f.type}:${f.name || f.label}`;
 
 // Stitch steps: a multi-step flow that swaps the DOM (Workday) only shows
