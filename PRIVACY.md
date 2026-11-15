@@ -49,7 +49,7 @@ server, no analytics, no tracking and no third-party code.
 
 | Permission | Why |
 |------------|-----|
-| Access to job sites (Greenhouse, Lever, Ashby, Workday and others) | Read the forms you fill in anywhere on those sites |
+| Access to the candidate pages of job application sites: Greenhouse and Lever job boards, Ashby, Workday, Workable, SmartRecruiters, and the `/jobs/` pages of iCIMS and `/careers/` pages of BambooHR | Read the application forms you fill in there |
 | Access to other sites, only if you grant it | "Record this site" asks for one site at a time. A blanket grant ("On all sites") is ignored |
 | `downloads` | Save each submission as files in your Downloads folder |
 | `storage`, `unlimitedStorage` | Keep records and settings in the browser |

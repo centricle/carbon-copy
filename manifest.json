@@ -13,19 +13,18 @@
   "content_scripts": [
     {
       "matches": [
-        "https://*.greenhouse.io/*",
+        "https://boards.greenhouse.io/*",
+        "https://job-boards.greenhouse.io/*",
+        "https://boards.eu.greenhouse.io/*",
+        "https://job-boards.eu.greenhouse.io/*",
         "https://jobs.lever.co/*",
+        "https://jobs.eu.lever.co/*",
         "https://jobs.ashbyhq.com/*",
         "https://*.myworkdayjobs.com/*",
         "https://apply.workable.com/*",
         "https://jobs.smartrecruiters.com/*",
-        "https://*.icims.com/*",
-        "https://*.bamboohr.com/*",
-        "https://*.upwork.com/*",
-        "https://*.toptal.com/*",
-        "https://wellfound.com/*",
-        "https://contra.com/*",
-        "https://*.usebraintrust.com/*"
+        "https://*.icims.com/jobs/*",
+        "https://*.bamboohr.com/careers/*"
       ],
       "js": ["src/lib/redact.js", "src/content/capture.js"],
       "all_frames": true,

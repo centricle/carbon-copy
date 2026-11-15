@@ -1,23 +1,32 @@
 // Job-search preset: the hosts Carbon Copy records on without being asked,
 // and how to read a company and a role out of each one's URLs.
 //
+// Candidate-facing pages of applicant tracking systems only. Not the
+// recruiter side (app.greenhouse.io holds other people's applications), not
+// the employee side of an HR suite (BambooHR and iCIMS also run payroll,
+// onboarding and I-9 portals, hence the path limits), and not freelance
+// marketplaces, where a chat's Send button looks like a submission. Those go
+// through "Record this site". Hosts and apply paths checked against live
+// postings on 2026-11-15: the boards.* Greenhouse hosts now redirect to
+// job-boards.*, and kept for older links; old BambooHR /jobs/ URLs redirect
+// to /careers/.
+//
 // MATCHES must equal content_scripts[0].matches in manifest.json. The unit
 // test checks that, so the two cannot drift apart.
 
 export const MATCHES = [
-  'https://*.greenhouse.io/*',
+  'https://boards.greenhouse.io/*',
+  'https://job-boards.greenhouse.io/*',
+  'https://boards.eu.greenhouse.io/*',
+  'https://job-boards.eu.greenhouse.io/*',
   'https://jobs.lever.co/*',
+  'https://jobs.eu.lever.co/*',
   'https://jobs.ashbyhq.com/*',
   'https://*.myworkdayjobs.com/*',
   'https://apply.workable.com/*',
   'https://jobs.smartrecruiters.com/*',
-  'https://*.icims.com/*',
-  'https://*.bamboohr.com/*',
-  'https://*.upwork.com/*',
-  'https://*.toptal.com/*',
-  'https://wellfound.com/*',
-  'https://contra.com/*',
-  'https://*.usebraintrust.com/*',
+  'https://*.icims.com/jobs/*',
+  'https://*.bamboohr.com/careers/*',
 ];
 
 // Does a Chrome match pattern ("https://*.example.com/*") cover this URL?
@@ -61,7 +70,7 @@ const RULES = [
     },
   },
   {
-    host: /^jobs\.lever\.co$/,
+    host: /^jobs\.(eu\.)?lever\.co$/,
     read(u, meta) {
       const seg = u.pathname.split('/').filter(Boolean);
       // og:title "<company> - <role>"

@@ -43,6 +43,25 @@ test('matchesPattern', () => {
   assert.ok(!isPresetUrl('https://acme.example/careers'));
 });
 
+test('preset covers candidate pages, not recruiter or employee portals', () => {
+  for (const url of [
+    'https://job-boards.greenhouse.io/acme/jobs/123',
+    'https://boards.greenhouse.io/embed/job_app?for=acme&token=123',
+    'https://job-boards.eu.greenhouse.io/acme/jobs/123',
+    'https://jobs.eu.lever.co/acme/abc-123/apply',
+    'https://careers-acme.icims.com/jobs/1234/anvil-engineer/candidate?in_iframe=1',
+    'https://acme.bamboohr.com/careers/12',
+  ]) assert.ok(isPresetUrl(url), `not covered: ${url}`);
+  for (const url of [
+    'https://app.greenhouse.io/people/42',
+    'https://acme.bamboohr.com/home',
+    'https://acme.bamboohr.com/employees/pay_info.php',
+    'https://acme.icims.com/platform/onboarding',
+    'https://www.upwork.com/ab/proposals/job/x/apply',
+    'https://contra.com/inbox',
+  ]) assert.ok(!isPresetUrl(url), `covered: ${url}`);
+});
+
 test('extractContext: Greenhouse board and embed', () => {
   assert.deepEqual(
     extractContext('https://boards.greenhouse.io/acme/jobs/123', { ogTitle: 'Job Application for Anvil Engineer at ACME Corporation' }),
@@ -59,6 +78,7 @@ test('extractContext: Lever, Ashby, Workday, SmartRecruiters', () => {
     extractContext('https://jobs.lever.co/acme/abc-123/apply', { ogTitle: 'ACME Corporation - Rocket Skate Fitter' }),
     { company: 'ACME Corporation', role: 'Rocket Skate Fitter', preset: 'jobs' },
   );
+  assert.equal(extractContext('https://jobs.eu.lever.co/acme/abc-123/apply').company, 'acme');
   assert.equal(extractContext('https://jobs.ashbyhq.com/acme/uuid/application', { h1: 'Magnet Tech' }).company, 'acme');
   assert.equal(extractContext('https://acme.wd5.myworkdayjobs.com/en-US/External/job/x').company, 'acme');
   assert.deepEqual(

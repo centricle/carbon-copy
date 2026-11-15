@@ -96,10 +96,26 @@ extension: **Clear** removes only submissions already saved to disk.
 
 ## Sites
 
-Recorded without asking, on every page of these sites and not only their
-application forms: Greenhouse, Lever, Ashby, Workday, Workable,
-SmartRecruiters, iCIMS, BambooHR, Upwork, Toptal, Wellfound, Contra and
-Braintrust.
+Recorded without asking, on the candidate side of these applicant tracking
+systems:
+
+- Greenhouse job boards (`job-boards.greenhouse.io`, the older
+  `boards.greenhouse.io`, and their EU versions)
+- Lever (`jobs.lever.co`, `jobs.eu.lever.co`)
+- Ashby (`jobs.ashbyhq.com`)
+- Workday (`*.myworkdayjobs.com`)
+- Workable (`apply.workable.com`)
+- SmartRecruiters (`jobs.smartrecruiters.com`)
+- iCIMS, the `/jobs/` pages only
+- BambooHR, the `/careers/` pages only
+
+Not the recruiter side (`app.greenhouse.io`), and not the employee portals
+that iCIMS and BambooHR also run (payroll, onboarding, time off).
+
+Freelance marketplaces (Upwork, Toptal, Wellfound, Contra, Braintrust) are not
+in that list, because their proposal forms share pages with chat. They work
+through **Record this site**, and there a chat message sent with a Send button
+can make a record too.
 
 Anywhere else: open the popup on that site and choose **Record this site**.
 Chrome asks for permission for that one site, and only that site. **Stop
@@ -126,8 +142,8 @@ Not on the Chrome Web Store yet.
 - **Multi-page applications** that load a new page per step (rather than
   swapping steps in place) produce one record per page for now.
 - **Submit detection** is a heuristic: a submit event, or a click on a button
-  that says Submit, Apply or Send. That includes a Send button in a chat on a
-  recorded site. It counts only once you have typed, picked or attached
+  that says Submit, Apply or Send. On a site you added yourself, that includes
+  a Send button in a chat. It counts only once you have typed, picked or attached
   something: a form holding nothing but the page's own defaults makes no
   record. A submission blocked by the browser's own form validation stays a
   draft. So does a second submission from the same tab and site within a few
