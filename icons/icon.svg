@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Two sheets: the carbon behind, your copy in front. -->
+  <rect x="34" y="8" width="80" height="98" rx="12" fill="#3949ab"/>
+  <rect x="14" y="24" width="80" height="98" rx="12" fill="#ffffff" stroke="#1f2333" stroke-width="7"/>
+  <path d="M32 56h44M32 75h44M32 94h28" stroke="#3949ab" stroke-width="8" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,51 @@
+{
+  "manifest_version": 3,
+  "name": "Carbon Copy",
+  "version": "0.1.0",
+  "description": "Keeps a copy of what you submit in job applications and other web forms, as plain files on your own disk.",
+  "minimum_chrome_version": "120",
+  "permissions": ["storage", "unlimitedStorage", "downloads", "scripting", "activeTab"],
+  "optional_host_permissions": ["https://*/*"],
+  "background": {
+    "service_worker": "src/background/sw.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.greenhouse.io/*",
+        "https://jobs.lever.co/*",
+        "https://jobs.ashbyhq.com/*",
+        "https://*.myworkdayjobs.com/*",
+        "https://apply.workable.com/*",
+        "https://jobs.smartrecruiters.com/*",
+        "https://*.icims.com/*",
+        "https://*.bamboohr.com/*",
+        "https://*.upwork.com/*",
+        "https://*.toptal.com/*",
+        "https://wellfound.com/*",
+        "https://contra.com/*",
+        "https://*.usebraintrust.com/*"
+      ],
+      "js": ["src/lib/redact.js", "src/content/capture.js"],
+      "all_frames": true,
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Carbon Copy",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
+}
