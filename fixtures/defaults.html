@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Acme Earthquake Pill Tester - ACME Corporation</title>
+  <meta property="og:site_name" content="ACME Corporation">
+  <link rel="stylesheet" href="fixtures.css">
+</head>
+<body>
+  <h1>Earthquake Pill Tester</h1>
+  <p>The posting and the form on one page. Before anyone types, the form is
+  not empty: Country has a default, a script has written a token into a
+  hidden field, and a captcha widget writes its response and fires an input
+  event. "Apply" on an untouched form must record nothing, and neither token
+  may ever be recorded.</p>
+
+  <div><button id="apply" type="button">Apply</button></div>
+
+  <form action="/submit" method="post">
+    <label for="country">Country</label>
+    <select id="country" name="country">
+      <option value="US" selected>United States</option>
+      <option value="CA">Canada</option>
+    </select>
+    <label for="nm">Full name</label>
+    <input id="nm" name="nm">
+    <textarea name="client_fingerprint" style="display:none"></textarea>
+    <textarea name="g-recaptcha-response" style="display:none"></textarea>
+    <button type="submit">Submit application</button>
+  </form>
+
+  <script>
+    document.querySelector('[name="client_fingerprint"]').value = 'PAGE-WRITTEN-FINGERPRINT';
+    // The captcha answers late, with an event, after the content script
+    // (document_idle) is listening. Twice to be sure; data-primed counts.
+    let n = 0;
+    const solve = () => {
+      const t = document.querySelector('[name="g-recaptcha-response"]');
+      t.value = 'RECAPTCHA-TOKEN-VALUE';
+      t.dispatchEvent(new Event('input', { bubbles: true }));
+      document.body.dataset.primed = ++n;
+    };
+    addEventListener('load', () => { setTimeout(solve, 300); setTimeout(solve, 800); });
+  </script>
+</body>
+</html>

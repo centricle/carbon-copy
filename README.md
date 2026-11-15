@@ -62,14 +62,16 @@ Skipped before anything leaves the page:
 - fields marked `autocomplete="cc-*"`, or labeled or named as a card number
   or CVV
 - fields labeled or named as a Social Security or social insurance number
-- `type="hidden"` inputs
+- `type="hidden"` inputs, captcha response tokens, and any field hidden with
+  CSS that holds a value the page wrote rather than you
 
 These rules read each field's type, `autocomplete` attribute, label and name,
 never its value. A sensitive answer in a field with an ordinary label, such as
 a bank account number, is recorded like any other answer. The rules do not
 yet apply to file uploads: an attached file's name and hash are kept whatever
-its field is labeled. A field hidden with CSS is kept too, because that is how
-single-page forms hide the steps you have already finished.
+its field is labeled. A field hidden with CSS is kept if you filled it in,
+because that is how single-page forms hide the steps you have already
+finished.
 
 EEO self-identification answers (gender, race, veteran and disability status)
 are skipped by default, recognized by their labels and by the section of the
@@ -113,8 +115,10 @@ Not on the Chrome Web Store yet.
   swapping steps in place) produce one record per page for now.
 - **Submit detection** is a heuristic: a submit event, or a click on a button
   that says Submit, Apply or Send. That includes a Send button in a chat on a
-  recorded site. A submission blocked by the browser's own form validation
-  stays a draft.
+  recorded site. It counts only once you have typed, picked or attached
+  something: a form holding nothing but the page's own defaults makes no
+  record. A submission blocked by the browser's own form validation stays a
+  draft.
 
 ## Development
 

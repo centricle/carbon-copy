@@ -28,6 +28,8 @@
   const CONTROL_SEL = 'input, select, textarea, button, [contenteditable]:not([contenteditable="false"]), script, style, template, noscript';
   const SUBMIT_CONTROL_SEL = 'button, input[type="submit"], input[type="button"], input[type="image"], [role="button"]';
   const SKIP_INPUT_TYPES = new Set(['hidden', 'submit', 'button', 'reset', 'image', 'search']);
+  // Captcha response fields: a token the widget wrote, never an answer.
+  const CAPTCHA_SEL = '[name="g-recaptcha-response"], [name="h-captcha-response"], [name="cf-turnstile-response"]';
 
   let settings = { captureEEO: false };
   chrome.storage.local.get('settings').then(v => { settings = { ...settings, ...(v.settings || {}) }; }).catch(() => {});
@@ -197,7 +199,7 @@
     const els = [...set].filter(el => {
       if (el.matches('[contenteditable]')) return !el.parentElement?.isContentEditable; // editing host only
       if (el.tagName === 'INPUT' && SKIP_INPUT_TYPES.has(typeOf(el))) return false;
-      if (el.closest('[role="search"]')) return false;
+      if (el.closest('[role="search"]') || el.matches(CAPTCHA_SEL)) return false;
       return !el.disabled;
     });
     // Document order, so the record reads top to bottom like the form.
@@ -276,6 +278,31 @@
     seenFiles.set(key, list);
   }
 
+  // ---------------------------------------------------------------- edits
+
+  // Fields that got an input or change event since the page opened or the
+  // last submission. A value nobody edited (a default the page selected, a
+  // captcha token a script wrote) does not make a form filled in, and a
+  // hidden one is not kept.
+  //
+  // Synthetic (untrusted) events count. Autofill extensions fill forms with
+  // them, and those answers are as much what you sent as typed ones. A page
+  // priming its own fields on load mostly does it before this script
+  // attaches at document_idle. (navigator.userActivation was tried as a
+  // gate and dropped: Playwright pages report hasBeenActive from the start,
+  // so it could not be tested.)
+  let edited = new WeakSet();
+
+  function editingHost(el) {
+    let h = el;
+    while (h.parentElement?.isContentEditable) h = h.parentElement;
+    return h;
+  }
+
+  function markEdited(el) {
+    edited.add(el.isContentEditable ? editingHost(el) : el);
+  }
+
   // ---------------------------------------------------------------- snapshot
 
   let step = 1;
@@ -301,6 +328,10 @@
     const files = [];
     const redacted = { secret: 0, eeo: 0 };
     const seenGroups = new Set();
+    let userFilled = false; // some answer here is one a person (or their autofill) gave
+    const note = (els, display) => {
+      if (display !== '' && display != null && els.some(x => edited.has(x))) userFilled = true;
+    };
 
     const allow = (el, label) => {
       if (R.secretReason(el, label)) { redacted.secret++; return false; }
@@ -325,9 +356,12 @@
           const checked = members.filter(m => m.checked);
           const value = type === 'radio' ? (checked[0]?.value ?? null) : checked.map(m => m.value);
           const display = checked.map(optionLabel).join(', ');
+          note(members, display);
           fields.push({ label, name, type: type === 'radio' ? 'radio' : 'checkbox-group', value, display });
           continue;
         }
+        // A lone checkbox ("I agree", "Send me job alerts") never makes a
+        // form filled in on its own: its display is always Yes or No.
         const label = labelFor(el, root);
         if (!allow(el, label)) continue;
         fields.push({ label, name, type: 'checkbox', value: el.checked, display: el.checked ? 'Yes' : 'No' });
@@ -346,9 +380,15 @@
         : labelFor(el, root);
       if (!allow(el, label)) continue;
       const { value, display } = valueOf(el, type);
-      // Empty and not on screen: a honeypot, or a step not reached yet.
-      // Filled but hidden: an earlier step of a single-page form. Keep it.
-      if (display === '' && el.tagName !== 'IFRAME' && !isRendered(el)) continue;
+      // An iframe editor's typing happens in its own document, out of sight
+      // of the listeners here, so any text in it counts as edited.
+      const isEdited = el.tagName === 'IFRAME' || edited.has(el);
+      // Not on screen and empty: a honeypot, or a step not reached yet. Not
+      // on screen and filled by the page (a captcha token): skip it too.
+      // Filled by you and hidden since: an earlier step of a single-page
+      // form. Keep that.
+      if (!isRendered(el) && el.tagName !== 'IFRAME' && (display === '' || !isEdited)) continue;
+      if (isEdited && display !== '') userFilled = true;
       fields.push({ label, name, type, value, display });
     }
 
@@ -359,7 +399,7 @@
     for (const list of seenFiles.values()) list.forEach(f => files.push(f));
 
     assignSteps(fields);
-    return { fields, files: dedupeFiles(files), redacted, takenAt: new Date().toISOString() };
+    return { fields, files: dedupeFiles(files), redacted, userFilled, takenAt: new Date().toISOString() };
   }
 
   // Once a submission is confirmed, whatever happens next in this page is a
@@ -368,6 +408,7 @@
   // which holds its own references to the files.
   function resetAfterSubmit() {
     seenFiles.clear();
+    edited = new WeakSet();
     step = 1;
     stepKeys = new Set();
   }
@@ -403,13 +444,14 @@
     };
   }
 
+  // Nothing a person entered: an untouched form, or "Apply" on a posting
+  // before the form exists. Never a record.
   function isEmpty(snap) {
-    const filled = snap.fields.some(f => f.type !== 'checkbox' && f.display !== '' && f.display != null);
-    return !filled && snap.files.length === 0;
+    return !snap.userFilled && snap.files.length === 0;
   }
 
   // The async half: hash the files, attach page info. Plain data out.
-  async function finish(snap) {
+  async function finish({ userFilled, ...snap }) {
     const files = await Promise.all(snap.files.map(async ({ label, file }) => ({
       label,
       name: file.name,
@@ -458,6 +500,7 @@
       rememberFiles(`file:${t.getAttribute('name') || t.id || label}`, label, t.files || []);
     }
     if (!isField(t)) return;
+    markEdited(t);
     draftRoot = scopeOf(t);
     clearTimeout(draftTimer);
     draftTimer = setTimeout(sendDraft, DRAFT_DELAY_MS);

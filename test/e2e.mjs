@@ -231,6 +231,27 @@ const cases = {
     await assertOnDisk(rec);
   },
 
+  // A form that is not empty before anyone types: a default select, a
+  // page-written hidden token, a captcha that fires an input event.
+  async 'defaults'(page) {
+    await page.goto(`${base}/fixtures/defaults.html`);
+    await page.waitForFunction(() => document.body.dataset.primed === '2');
+    await page.click('#apply');
+    await page.waitForTimeout(2500);
+    const summary = rs => JSON.stringify(rs.map(r => [r.status, r.trigger, r.fields.map(f => `${f.label}=${f.display}`)]));
+    const early = (await records()).filter(r => r.page.url.includes('defaults.html'));
+    assert.equal(early.length, 0, `"Apply" on an untouched form made a record: ${summary(early)}`);
+
+    await page.fill('#nm', 'Wile E. Coyote');
+    await Promise.all([page.waitForURL('**/submit'), page.click('button[type="submit"]')]);
+    const rec = await submittedFor('defaults.html');
+    assert.deepEqual(rec.fields.map(f => [f.label, f.display]), [['Country', 'United States'], ['Full name', 'Wile E. Coyote']]);
+    const blob = JSON.stringify(rec);
+    assert.ok(!blob.includes('RECAPTCHA-TOKEN-VALUE'), 'captcha token recorded');
+    assert.ok(!blob.includes('PAGE-WRITTEN-FINGERPRINT'), 'page-written hidden value recorded');
+    await assertOnDisk(rec);
+  },
+
   // An upload widget that clears its input, then a second application in
   // the same page. The first record keeps the file; the "Apply to another
   // job" click and the second application must not inherit it.
