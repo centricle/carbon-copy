@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Giant Magnet Installer - ACME Corporation</title>
+  <meta property="og:site_name" content="ACME Corporation">
+  <link rel="stylesheet" href="fixtures.css">
+</head>
+<body>
+  <h1>Giant Magnet Installer</h1>
+  <p>No &lt;form&gt;. The resume widget "uploads" the file the moment it is
+  chosen, then clears the input, the way ATS upload widgets do. After
+  submitting, the thanks view offers "Apply to another job", which renders a
+  fresh form in the same page.</p>
+
+  <div id="app"></div>
+
+  <script>
+    const app = document.getElementById('app');
+
+    function renderForm() {
+      app.innerHTML = `
+        <div class="fields">
+          <label for="name">Full name</label>
+          <input id="name">
+          <label for="resume">Resume</label>
+          <input id="resume" type="file">
+          <p id="uploaded"></p>
+        </div>
+        <button id="go" type="button">Submit application</button>`;
+      const input = document.getElementById('resume');
+      input.addEventListener('change', () => {
+        const name = input.files[0]?.name;
+        setTimeout(() => {
+          input.value = '';
+          document.getElementById('uploaded').textContent = name ? `Uploaded ${name}` : '';
+        }, 100);
+      });
+      document.getElementById('go').addEventListener('click', () => {
+        app.innerHTML = '<p>Submitting...</p>';
+        fetch('/api/apply', { method: 'POST', body: '{}' }).then(renderThanks);
+      });
+    }
+
+    function renderThanks() {
+      app.innerHTML = '<p id="done">Thanks! We will be in touch.</p><button id="more" type="button">Apply to another job</button>';
+      document.getElementById('more').addEventListener('click', renderForm);
+    }
+
+    renderForm();
+  </script>
+</body>
+</html>

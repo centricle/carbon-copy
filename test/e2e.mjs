@@ -231,6 +231,37 @@ const cases = {
     await assertOnDisk(rec);
   },
 
+  // An upload widget that clears its input, then a second application in
+  // the same page. The first record keeps the file; the "Apply to another
+  // job" click and the second application must not inherit it.
+  async 'spa-upload'(page) {
+    await page.goto(`${base}/fixtures/spa-upload.html`);
+    await page.fill('#name', 'Wile E. Coyote');
+    await page.setInputFiles('#resume', { name: 'wile-e-coyote-resume.pdf', mimeType: 'application/pdf', buffer: RESUME });
+    await page.waitForSelector('#uploaded:has-text("Uploaded")');
+    assert.equal(await page.$eval('#resume', el => el.files.length), 0, 'widget should have cleared the input');
+    await page.click('#go');
+    await page.waitForSelector('#done');
+    const first = await submittedFor('spa-upload');
+    assert.deepEqual(first.files.map(f => [f.label, f.name, f.sha256]), [['Resume', 'wile-e-coyote-resume.pdf', RESUME_SHA]]);
+
+    await page.click('#more');
+    await page.fill('#name', 'Wile E. Coyote, Genius');
+    await page.click('#go');
+    await page.waitForSelector('#done');
+    const second = await waitFor(
+      rs => rs.find(r => r.id !== first.id && r.page.url.includes('spa-upload') && r.status === 'submitted' && r.sink),
+      'second submitted record',
+    );
+    assert.equal(byLabel(second)['Full name'].display, 'Wile E. Coyote, Genius');
+    assert.deepEqual(second.files, [], 'second application inherited the first one\'s file');
+    await page.waitForTimeout(500);
+    const all = (await records()).filter(r => r.page.url.includes('spa-upload'));
+    assert.deepEqual(all.map(r => r.fields.length).sort(), [1, 1], `phantom record: ${JSON.stringify(all.map(r => [r.status, r.fields.length, r.files.length]))}`);
+    await assertOnDisk(first);
+    await assertOnDisk(second);
+  },
+
   async 'clear-on-click'(page) {
     await page.goto(`${base}/fixtures/clear-on-click.html`);
     await page.fill('#name', 'Wile E. Coyote');

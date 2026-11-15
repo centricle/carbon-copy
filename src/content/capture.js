@@ -352,13 +352,24 @@
       fields.push({ label, name, type, value, display });
     }
 
-    // Every file chosen while this page has been open, latest per input:
-    // inputs an upload widget cleared, inputs a later step removed, and
-    // files dropped onto a drop zone without ever touching an <input>.
+    // Every file chosen since the page opened or the last submission went
+    // through, latest per input: inputs an upload widget cleared, inputs a
+    // later step removed, and files dropped onto a drop zone without ever
+    // touching an <input>.
     for (const list of seenFiles.values()) list.forEach(f => files.push(f));
 
     assignSteps(fields);
     return { fields, files: dedupeFiles(files), redacted, takenAt: new Date().toISOString() };
+  }
+
+  // Once a submission is confirmed, whatever happens next in this page is a
+  // new application (an SPA's "Apply to another job"): no files from the
+  // last one, and back to step 1. Runs after the snapshot was collected,
+  // which holds its own references to the files.
+  function resetAfterSubmit() {
+    seenFiles.clear();
+    step = 1;
+    stepKeys = new Set();
   }
 
   function dedupeFiles(list) {
@@ -500,6 +511,7 @@
       if (!pending || pending.id !== id) return;
       const failed = form ? true : !!(root.isConnected && root.querySelector('[aria-invalid="true"]'));
       enqueue(() => ({ type: 'cc:resolve', submitId: id, status: failed ? 'draft' : 'submitted' }));
+      if (!failed) resetAfterSubmit();
       pending = null;
     }, form ? NATIVE_SUBMIT_WINDOW_MS : SPA_SETTLE_MS);
   }
@@ -511,6 +523,7 @@
       clearTimeout(pending.timer);
       const id = pending.id;
       enqueue(() => ({ type: 'cc:resolve', submitId: id, status: 'submitted', trigger: 'click+submit' }));
+      resetAfterSubmit();
       pending = { ...pending, form: null, timer: null }; // keep `at` for the double-click guard
       return;
     }
@@ -522,6 +535,7 @@
     clearTimeout(draftTimer);
     draftTimer = null;
     enqueue(async () => ({ type: 'cc:snapshot', status: 'submitted', trigger: 'submit', snapshot: await finish(snap) }));
+    resetAfterSubmit();
   }
 
   // Leaving with a draft still debouncing: write it now.
