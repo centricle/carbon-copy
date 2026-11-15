@@ -47,35 +47,51 @@ Because ACME ships to the desert overnight.
 
 The file hash answers "which version of my resume did I send?"
 
-## What is recorded, and what never is
+## What is recorded, and what is skipped
 
 Recorded, at the moment you press Submit: every text field, text area,
 dropdown, radio group, checkbox and rich-text editor in the form, with its
-label, plus the name, size, type and SHA-256 hash of any file you attach (not
-the file itself).
+label, plus the name, size, type and SHA-256 hash of any file you attach. The
+file is read inside the page to compute the hash, and its contents are never
+stored. The record also keeps the page's full address (query string included)
+and title.
 
-Never recorded, by rule, before anything leaves the page:
+Skipped before anything leaves the page:
 
 - password fields, and fields marked as passwords or one-time codes
-- card numbers, CVVs and anything else marked `autocomplete="cc-*"`
-- fields labeled as a Social Security or social insurance number
-- hidden inputs
+- fields marked `autocomplete="cc-*"`, or labeled or named as a card number
+  or CVV
+- fields labeled or named as a Social Security or social insurance number
+- `type="hidden"` inputs
+
+These rules read each field's type, `autocomplete` attribute, label and name,
+never its value. A sensitive answer in a field with an ordinary label, such as
+a bank account number, is recorded like any other answer. The rules do not
+yet apply to file uploads: an attached file's name and hash are kept whatever
+its field is labeled. A field hidden with CSS is kept too, because that is how
+single-page forms hide the steps you have already finished.
 
 EEO self-identification answers (gender, race, veteran and disability status)
-are skipped by default. A toggle in the popup turns them on.
+are skipped by default, recognized by their labels and by the section of the
+form they sit in. A toggle in the popup turns them on.
 
 While you type, a draft is kept in the browser so a crash or a closed tab does
-not lose your work. Drafts are never written to disk. Only a submission
-produces files.
+not lose your work. Only a submission writes files on its own. A draft reaches
+disk only if you choose **Save files** on it in the popup, or **Export all**,
+which includes drafts. Drafts stay in the browser until you remove the
+extension: **Clear** removes only submissions already saved to disk.
 
 ## Sites
 
-Recorded without asking: Greenhouse, Lever, Ashby, Workday, Workable,
+Recorded without asking, on every page of these sites and not only their
+application forms: Greenhouse, Lever, Ashby, Workday, Workable,
 SmartRecruiters, iCIMS, BambooHR, Upwork, Toptal, Wellfound, Contra and
 Braintrust.
 
 Anywhere else: open the popup on that site and choose **Record this site**.
-Chrome asks for permission for that one site, and only that site.
+Chrome asks for permission for that one site, and only that site. **Stop
+recording this site** applies to pages you open afterward, so reload any tab
+already open on that site.
 
 ## Install
 
@@ -96,8 +112,9 @@ Not on the Chrome Web Store yet.
 - **Multi-page applications** that load a new page per step (rather than
   swapping steps in place) produce one record per page for now.
 - **Submit detection** is a heuristic: a submit event, or a click on a button
-  that says Submit, Apply or Send. A submission blocked by the browser's own
-  form validation stays a draft.
+  that says Submit, Apply or Send. That includes a Send button in a chat on a
+  recorded site. A submission blocked by the browser's own form validation
+  stays a draft.
 
 ## Development
 
