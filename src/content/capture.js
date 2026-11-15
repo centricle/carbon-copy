@@ -47,11 +47,18 @@
     return t.slice(0, 500);
   }
 
+  // Copies of page nodes are made in a document with no browsing context.
+  // Cloned into the page's own document, an <img> in a label starts loading
+  // (a request the page can see, which tells it Carbon Copy is installed),
+  // and a custom element runs page code in its constructor. Here, neither.
+  const inert = document.implementation.createHTMLDocument('');
+  const inertCopy = node => inert.importNode(node, true);
+
   // Text of a node with the form controls inside it removed, so a wrapping
   // <label> does not pick up a <select>'s option list.
   function textOf(node) {
     if (!node) return '';
-    const c = node.cloneNode(true);
+    const c = inertCopy(node);
     if (c.querySelectorAll) c.querySelectorAll(CONTROL_SEL).forEach(n => n.remove());
     return squash(c.textContent);
   }
@@ -213,7 +220,7 @@
     let c = el.parentElement;
     for (let i = 0; c && i < 5; i++, c = c.parentElement) {
       if (/control|container/i.test(typeof c.className === 'string' ? c.className : '')) {
-        const clone = c.cloneNode(true);
+        const clone = inertCopy(c);
         clone.querySelectorAll(`${CONTROL_SEL}, [class*="placeholder"], [class*="indicator"], [aria-live]`).forEach(n => n.remove());
         return squash(clone.textContent);
       }

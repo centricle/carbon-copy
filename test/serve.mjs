@@ -18,6 +18,13 @@ const drain = req => new Promise(resolve => { req.on('data', () => {}); req.on('
 export function serve(port = 0) {
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://x');
+    // An image that is never cached, so every load is a request: a fixture
+    // puts it inside a label to catch anything that makes the page fetch it.
+    if (url.pathname === '/pixel.gif') {
+      server.pixelHits++;
+      res.writeHead(200, { 'content-type': 'image/gif', 'cache-control': 'no-store' });
+      return res.end(Buffer.from('R0lGODlhAQABAAAAACw=', 'base64'));
+    }
     if (req.method === 'POST') {
       await drain(req);
       if (url.pathname === '/api/apply') {
@@ -44,6 +51,7 @@ export function serve(port = 0) {
       res.end('not found');
     }
   });
+  server.pixelHits = 0;
   return new Promise(resolve => server.listen(port, () => resolve(server)));
 }
 

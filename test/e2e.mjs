@@ -464,7 +464,10 @@ const cases = {
   },
 
   async 'labels'(page) {
+    const hits = server.pixelHits;
     await page.goto(`${base}/fixtures/labels.html`);
+    await page.waitForLoadState('load');
+    assert.equal(server.pixelHits - hits, 1, 'the page loads the pixel in its label once');
     await page.fill('#p1', 'v1');
     await page.selectOption('select[name="p2"]', 'a');
     await page.fill('input[name="p3"]', 'v3');
@@ -494,6 +497,8 @@ const cases = {
         ['Help button between', 'v10'],
       ],
     );
+    // Reading the label's text made no copy of its <img> that loaded.
+    assert.equal(server.pixelHits - hits, 1, 'capturing the form fetched the label image again');
     await assertOnDisk(rec);
   },
 
