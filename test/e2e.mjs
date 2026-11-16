@@ -223,6 +223,21 @@ const cases = {
     assert.ok(md.includes(`## Why ACME?\n\n${WHY}\n`), 'markdown answer');
     assert.ok(md.includes(RESUME_SHA), 'markdown file hash');
 
+    // Both files stay in Chrome's download list, whose folder button opens
+    // ~/Downloads/carbon-copy/. Each entry's URL is a blob:, never a data:
+    // URL, so no answer reaches download history.
+    const listed = await ext.evaluate(async paths => (await chrome.downloads.search({}))
+      .filter(i => paths.includes(i.filename)).map(i => ({ state: i.state, url: i.url, finalUrl: i.finalUrl })),
+    [rec.sink.md, rec.sink.json]);
+    assert.equal(listed.length, 2, 'saved files missing from the download list');
+    for (const i of listed) {
+      assert.equal(i.state, 'complete');
+      for (const u of [i.url, i.finalUrl]) {
+        assert.match(u, /^blob:chrome-extension:\/\//, `download history holds ${u.slice(0, 40)}`);
+        assert.ok(!u.includes(encodeURIComponent(WHY).slice(0, 30)), 'an answer in a download URL');
+      }
+    }
+
     // Save files again: the stored record now has a sink full of absolute
     // paths, and the new copy must not carry them.
     const res = await ext.evaluate(id => chrome.runtime.sendMessage({ type: 'cc:redownload', id }), rec.id);
@@ -603,9 +618,9 @@ const cases = {
     assert.equal((await records()).length, before);
   },
 
-  // Export all after months of use: one file holding every record. The
-  // service worker has no URL.createObjectURL, so the body goes out as a
-  // single data: URL, and this checks Chrome takes one this size.
+  // Export all after months of use: one file holding every record. The body
+  // crosses one runtime message to the offscreen document and comes back as
+  // a blob: URL; this checks that path takes one this size.
   async 'export-large'() {
     const filler = 'Anvil, frankly superb; ships overnight. '.repeat(2000); // 80 KB
     const ids = await ext.evaluate(async text => {
@@ -625,20 +640,20 @@ const cases = {
       return ids;
     }, filler);
     try {
-      const urlBytes = await ext.evaluate(async () => {
+      const bodyBytes = await ext.evaluate(async () => {
         const all = await (await import('/src/lib/store.js')).list();
-        return encodeURIComponent(JSON.stringify({ records: all }, null, 2)).length;
+        return new TextEncoder().encode(JSON.stringify({ records: all }, null, 2)).length;
       });
-      assert.ok(urlBytes > 3 * 1024 * 1024, `seeded only ${urlBytes} bytes`);
+      assert.ok(bodyBytes > 3 * 1024 * 1024, `seeded only ${bodyBytes} bytes`);
       const t = Date.now();
       const res = await ext.evaluate(() => chrome.runtime.sendMessage({ type: 'cc:export' }));
-      assert.ok(res.ok, `export of a ${(urlBytes / 1048576).toFixed(1)} MB data: URL failed: ${res.error}`);
+      assert.ok(res.ok, `export of ${(bodyBytes / 1048576).toFixed(1)} MB failed: ${res.error}`);
       const text = await readFile(res.record.path, 'utf8');
       const out = JSON.parse(text);
       assert.ok(ids.every(id => out.records.some(r => r.id === id)), 'seeded records missing from export');
       assert.equal(out.records.length, (await records()).length);
       assert.ok(!out.records.some(r => 'sink' in r) && !text.includes(downloads), 'save paths in the export');
-      console.log(`      export: ${(urlBytes / 1048576).toFixed(1)} MB data: URL, ${out.records.length} records, ${Date.now() - t}ms`);
+      console.log(`      export: ${(bodyBytes / 1048576).toFixed(1)} MB via blob: URL, ${out.records.length} records, ${Date.now() - t}ms`);
       await rm(res.record.path);
     } finally {
       await ext.evaluate(async ids => (await import('/src/lib/store.js')).removeMany(ids), ids);
@@ -665,8 +680,8 @@ const cases = {
       const s = res.record.sink;
       assert.deepEqual(await readdir(elsewhere), [], 'Chrome wrote through the symlink');
       assert.match(s.warning || s.error || '', /symlink/, JSON.stringify(s));
-      // Saved, failed or misplaced, no entry in chrome://downloads may keep
-      // the record in its data: URL.
+      // Saved, failed or misplaced, no entry in chrome://downloads may hold
+      // the record in its URL.
       const left = await ext.evaluate(async () => (await chrome.downloads.search({}))
         .filter(i => /^data:(text\/markdown|application\/json)/.test(i.url)).map(i => `${i.state} ${i.error || ''} ${i.filename}`));
       assert.deepEqual(left, [], 'download entries left behind');

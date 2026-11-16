@@ -198,6 +198,7 @@ gh attestation verify carbon-copy.zip -R centricle/carbon-copy
 | `src/lib/throttle.js` | One submission on disk per tab and site at a time |
 | `src/lib/render-md.js` | Record to Markdown |
 | `src/lib/sink-downloads.js` | Writes the files via `chrome.downloads` |
+| `src/offscreen/` | Turns each file into an in-memory link, so download history never holds its contents |
 | `src/presets/jobs.js` | Job-site hosts, and company/role from their URLs |
 | `welcome/` | First-run page: what is recorded, and Start recording |
 | `scripts/package.mjs` | The list of shipped files, and the store zip |

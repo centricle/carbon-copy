@@ -1,7 +1,11 @@
 // Disk sink: write a record as .md + .json under ~/Downloads/carbon-copy/
-// via chrome.downloads. No native host, no extra permission beyond
-// "downloads". A service worker has no URL.createObjectURL, so the bodies go
-// out as data: URLs.
+// via chrome.downloads. No native host.
+//
+// The bodies go out as blob: URLs made in an offscreen document, because a
+// service worker has no URL.createObjectURL. Not as data: URLs: Chrome keeps
+// every download's URL in its history, and a data: URL there would hold the
+// whole record. A revoked blob: URL holds nothing, so the entries can stay in
+// Chrome's download list, where its folder button opens ~/Downloads/carbon-copy/.
 
 import { renderMarkdown } from './render-md.js';
 
@@ -34,9 +38,41 @@ export function basename(record) {
   return `${localDate(record.capturedAt)}-${who}-${what}`;
 }
 
-function dataUrl(body, mime) {
-  return `data:${mime};charset=utf-8,${encodeURIComponent(body)}`;
+const OFFSCREEN = 'src/offscreen/blobs.html';
+let opening = null;
+let closing = null;
+let users = 0;
+
+async function openOffscreen() {
+  await closing;
+  const open = await chrome.runtime.getContexts({
+    contextTypes: ['OFFSCREEN_DOCUMENT'],
+    documentUrls: [chrome.runtime.getURL(OFFSCREEN)],
+  });
+  if (open.length) return;
+  opening ??= chrome.offscreen.createDocument({
+    url: OFFSCREEN,
+    reasons: ['BLOBS'],
+    justification: 'Saves records through chrome.downloads as blob: URLs, so download history never holds their contents.',
+  }).finally(() => { opening = null; });
+  await opening;
 }
+
+// Runs fn with the offscreen document open; the last writer out closes it.
+// A writer arriving while it closes waits for the close, then reopens it.
+async function withBlobs(fn) {
+  users++;
+  try {
+    await openOffscreen();
+    return await fn();
+  } finally {
+    if (--users === 0) {
+      closing = chrome.offscreen.closeDocument().catch(() => {}).finally(() => { closing = null; });
+    }
+  }
+}
+
+const offscreen = msg => chrome.runtime.sendMessage({ target: 'cc-offscreen', ...msg });
 
 // Resolves with the final DownloadItem once the file is on disk.
 function settle(id, timeoutMs = 15000) {
@@ -72,25 +108,28 @@ export function landedWhereAsked(actual, requested) {
   return path.includes(`/${DIR}/`) && path.split('/').pop().startsWith(want);
 }
 
+// Call inside withBlobs. The entry stays in Chrome's download list whether
+// the save worked or not; it names the file and holds none of its contents.
 async function writeOne(filename, body, mime) {
-  const id = await chrome.downloads.download({
-    url: dataUrl(body, mime),
-    filename,
-    saveAs: false,
-    conflictAction: 'uniquify',
-  });
+  const made = await offscreen({ type: 'blob', body, mime: `${mime};charset=utf-8` });
+  if (!made?.url) throw new Error('offscreen document made no blob: URL');
   try {
-    const item = await settle(id);
-    return { path: item.filename, ok: landedWhereAsked(item.filename, filename) };
-  } catch (err) {
-    // Stuck or interrupted: stop it, so no partial file is left behind.
-    await chrome.downloads.cancel(id).catch(() => {});
-    throw err;
+    const id = await chrome.downloads.download({
+      url: made.url,
+      filename,
+      saveAs: false,
+      conflictAction: 'uniquify',
+    });
+    try {
+      const item = await settle(id);
+      return { path: item.filename, ok: landedWhereAsked(item.filename, filename) };
+    } catch (err) {
+      // Stuck or interrupted: stop it, so no partial file is left behind.
+      await chrome.downloads.cancel(id).catch(() => {});
+      throw err;
+    }
   } finally {
-    // The entry in chrome://downloads holds the whole record in its data:
-    // URL, so it goes whether the save worked or not. A saved file stays on
-    // disk.
-    await chrome.downloads.erase({ id }).catch(() => {});
+    await offscreen({ type: 'revoke', url: made.url }).catch(() => {});
   }
 }
 
@@ -102,8 +141,10 @@ export const fileCopy = ({ sink, ...rest }) => rest;
 // Returns { md, json, at, warning? }: absolute paths as Chrome reports them.
 export async function writeRecord(record) {
   const base = `${DIR}/${basename(record)}`;
-  const md = await writeOne(`${base}.md`, renderMarkdown(record), 'text/markdown');
-  const json = await writeOne(`${base}.json`, JSON.stringify(fileCopy(record), null, 2) + '\n', 'application/json');
+  const [md, json] = await withBlobs(async () => [
+    await writeOne(`${base}.md`, renderMarkdown(record), 'text/markdown'),
+    await writeOne(`${base}.json`, JSON.stringify(fileCopy(record), null, 2) + '\n', 'application/json'),
+  ]);
   const out = { md: md.path, json: json.path, at: new Date().toISOString() };
   if (!md.ok || !json.ok) {
     out.warning = `Chrome saved these files somewhere other than ~/Downloads/${DIR}/. Is that folder a symlink? Chrome will not write through one.`;
@@ -114,5 +155,5 @@ export async function writeRecord(record) {
 export async function writeExport(records) {
   const name = `${DIR}/export-${localDate(new Date().toISOString())}.json`;
   const body = JSON.stringify({ exportedAt: new Date().toISOString(), records: records.map(fileCopy) }, null, 2) + '\n';
-  return (await writeOne(name, body, 'application/json')).path;
+  return (await withBlobs(() => writeOne(name, body, 'application/json'))).path;
 }
