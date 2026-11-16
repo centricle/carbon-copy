@@ -599,6 +599,95 @@ const cases = {
     }
   },
 
+  // Pause from the popup: nothing recorded and the toolbar says so; an
+  // answer typed while paused stays out after Resume; a timed pause ends on
+  // the clock with no click. A paused submit never reaches the SW, so it
+  // does not count against the submit gate, but parts 2 and 3 both record,
+  // so part 3 uses its own tab.
+  async pause(page) {
+    const badge = () => ext.evaluate(() => chrome.action.getBadgeText({}));
+    const badgeReads = async (want, what) => {
+      const end = Date.now() + 5000;
+      while (Date.now() < end) {
+        if (await badge() === want) return;
+        await new Promise(r => setTimeout(r, 100));
+      }
+      throw new Error(`badge never read "${want}" ${what}; last "${await badge()}"`);
+    };
+    const ours = async q => (await records()).filter(r => r.page.url.includes(`spa-fetch.html?${q}`));
+    const list = () => readdir(join(downloads, 'carbon-copy')).catch(() => []);
+    const popup = await context.newPage();
+    const later = await context.newPage();
+    try {
+      await popup.goto(`chrome-extension://${extId}/popup/popup.html`);
+      await popup.waitForSelector('#pause:not([hidden])');
+      assert.deepEqual([await popup.textContent('#pause-short'), await popup.textContent('#pause-long')], ['1 hour', '8 hours']);
+      const t0 = Date.now();
+      await popup.click('#pause-short');
+      await popup.waitForSelector('#resume:not([hidden])');
+      assert.match(await popup.textContent('#pause-state'), /^Paused until /);
+      assert.ok(await popup.isHidden('#pause-short'));
+      const { pausedUntil } = await ext.evaluate(async () => (await chrome.storage.local.get('settings')).settings);
+      assert.ok(Math.abs(pausedUntil - (t0 + 3600e3)) < 5000, `pausedUntil is ${pausedUntil - t0}ms out`);
+      await badgeReads('off', 'after Pause');
+
+      // 1. A whole application while paused: nothing stored, nothing on disk.
+      const before = await list();
+      await page.goto(`${base}/fixtures/spa-fetch.html?paused`);
+      await page.fill('#name', 'Wile E. Coyote');
+      await page.fill('#pitch', 'Typed while paused.');
+      await page.click('#go');
+      await page.waitForSelector('#done');
+      await page.waitForTimeout(2500);
+      assert.deepEqual(await ours('paused'), [], 'recorded while paused');
+      assert.deepEqual(await list(), before, 'files written while paused');
+
+      // 2. Typed while paused, still in the field after Resume: left out,
+      // and the record says one answer is missing. Filling #name blurs
+      // #pitch, whose change event then fires after Resume; that late
+      // event must not count as an edit (it did, in the first draft).
+      await page.goto(`${base}/fixtures/spa-fetch.html?resumed`);
+      await page.fill('#pitch', 'Private: typed while paused.');
+      await popup.click('#resume');
+      await popup.waitForSelector('#pause-short:not([hidden])');
+      await badgeReads('', 'after Resume');
+      await page.fill('#name', 'Wile E. Coyote');
+      await page.click('#go');
+      await page.waitForSelector('#done');
+      const rec = await submittedFor('spa-fetch.html?resumed');
+      const f = byLabel(rec);
+      assert.equal(f['Full name'].display, 'Wile E. Coyote');
+      assert.equal(f['Tell us about a calibration you are proud of'], undefined, 'field edited while paused was recorded');
+      assert.ok(!JSON.stringify(rec).includes('Private'), 'paused answer in the record');
+      assert.equal(rec.redacted.paused, 1);
+      const md = await assertOnDisk(rec);
+      assert.match(md, /1 field left out, last edited while Carbon Copy was paused/);
+
+      // 3. A short pause runs out by itself: recording resumes on the clock
+      // and the alarm clears the badge (unpacked, so no 30 s alarm floor).
+      await setSettings({ pausedUntil: Date.now() + 1500 });
+      await badgeReads('off', 'during a short pause');
+      await later.waitForTimeout(1700);
+      await later.goto(`${base}/fixtures/spa-fetch.html?expired`);
+      await later.fill('#name', 'Wile E. Coyote');
+      await later.fill('#pitch', 'After the pause ran out.');
+      await later.click('#go');
+      await later.waitForSelector('#done');
+      const after = await submittedFor('spa-fetch.html?expired');
+      assert.equal(byLabel(after)['Tell us about a calibration you are proud of'].display, 'After the pause ran out.');
+      assert.equal(after.redacted.paused, undefined);
+      await badgeReads('', 'after the pause ran out');
+    } finally {
+      await ext.evaluate(async () => {
+        const { settings = {} } = await chrome.storage.local.get('settings');
+        delete settings.pausedUntil;
+        await chrome.storage.local.set({ settings });
+      });
+      await popup.close();
+      await later.close();
+    }
+  },
+
   // The SW stores snapshots only from frames on a covered site. "Stop
   // recording this site" relies on it (the script in an open tab keeps
   // running), and so does any sender that is not a page at all. The

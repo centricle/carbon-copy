@@ -31,11 +31,26 @@
   // Captcha response fields: a token the widget wrote, never an answer.
   const CAPTCHA_SEL = '[name="g-recaptcha-response"], [name="h-captcha-response"], [name="cf-turnstile-response"]';
 
-  let settings = { captureEEO: false };
-  chrome.storage.local.get('settings').then(v => { settings = { ...settings, ...(v.settings || {}) }; }).catch(() => {});
+  // Replaced on every change, never merged into: Resume deletes pausedUntil,
+  // and a merge would keep the old value and the page paused.
+  const DEFAULTS = { captureEEO: false };
+  let settings = { ...DEFAULTS };
+  let settingsLoaded = false;
+  chrome.storage.local.get('settings').then(v => {
+    settings = { ...DEFAULTS, ...(v.settings || {}) };
+    settingsLoaded = true;
+    if (paused()) pausedAllAlong();
+  }).catch(() => { settingsLoaded = true; });
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes.settings) settings = { ...settings, ...(changes.settings.newValue || {}) };
+    if (area === 'local' && changes.settings) settings = { ...DEFAULTS, ...(changes.settings.newValue || {}) };
   });
+
+  // Paused from the popup: this page is ignored until the time is up. No
+  // edits counted, no files remembered, nothing sent. Checked against the
+  // clock on every event, so the pause ends on time with no message. The
+  // service worker drops anything that arrives anyway. Same rule as
+  // isPaused in src/lib/pause.js, which a classic script cannot import.
+  const paused = () => Number(settings.pausedUntil) > Date.now();
 
   // ---------------------------------------------------------------- text
 
@@ -315,8 +330,74 @@
     return h;
   }
 
+  const editTarget = el => (el.isContentEditable ? editingHost(el) : el);
+
   function markEdited(el) {
-    edited.add(el.isContentEditable ? editingHost(el) : el);
+    const t = editTarget(el);
+    edited.add(t);
+    touchedWhilePaused.delete(t);
+    // A new choice in a radio group replaces the whole answer, including a
+    // choice made while paused in another of its buttons.
+    if (t.type === 'radio' && t.name) {
+      const scope = t.form || t.ownerDocument;
+      scope.querySelectorAll(`input[type="radio"][name="${CSS.escape(t.name)}"]`).forEach(m => touchedWhilePaused.delete(m));
+    }
+    if (!settingsLoaded) earlyEdits.push(t);
+  }
+
+  // ---------------------------------------------------------------- pause
+
+  // Fields edited during a pause stay out of every snapshot until they are
+  // edited again after it. A snapshot reads every visible field, edited or
+  // not, so without this an answer typed while paused would be recorded
+  // the next time anything else on the page was. Not reset by a
+  // submission: the value is still in the field. (A rich-text editor in its
+  // own iframe is out of reach here, as it is for `edited`.)
+  //
+  // Field -> its value when last edited while paused. The value is kept
+  // because a text field's change event fires on blur: typing done while
+  // paused reports its change after Resume, the moment focus moves on.
+  const touchedWhilePaused = new WeakMap();
+  const rawValue = el => (el.isContentEditable ? el.innerText
+    : (el.type === 'checkbox' || el.type === 'radio') ? el.checked
+      : el.value);
+  const stillPausedValue = t => touchedWhilePaused.has(t) && touchedWhilePaused.get(t) === rawValue(t);
+
+  // Edits in the first moments, before settings have loaded, when this page
+  // cannot yet know it is paused. An autofill extension filling the form on
+  // load does exactly this. If the settings turn out to say paused, those
+  // edits were made while paused.
+  const earlyEdits = [];
+  function pausedAllAlong() {
+    for (const t of earlyEdits.splice(0)) {
+      edited.delete(t);
+      touchedWhilePaused.set(t, rawValue(t));
+    }
+    seenFiles.clear();
+    clearTimeout(draftTimer);
+    draftTimer = null;
+  }
+
+  function editedWhilePaused(t) {
+    if (t.matches('input[type="file"]')) {
+      // Whatever was remembered for this input is no longer what it holds.
+      seenFiles.delete(fileKey(t, labelFor(t, scopeOf(t))));
+    }
+    if (isField(t)) {
+      const h = editTarget(t);
+      touchedWhilePaused.set(h, rawValue(h));
+    }
+  }
+
+  // A submission while paused is not recorded, but it still ends that
+  // application, as a recorded one would: the next one on this page starts
+  // clean, back at step 1. The service worker may still hold that
+  // application's draft for this tab and path; the next snapshot replaces
+  // its fields wholesale (mergeSteps keeps only steps before the current).
+  function submittedWhilePaused() {
+    clearTimeout(draftTimer);
+    draftTimer = null;
+    resetAfterSubmit();
   }
 
   // ---------------------------------------------------------------- snapshot
@@ -349,6 +430,10 @@
       if (display !== '' && display != null && els.some(x => edited.has(x))) userFilled = true;
     };
 
+    // Counted, so the record says an answer is missing and why. The key is
+    // added only when it happens, so records made without a pause keep
+    // their usual shape.
+    const leftOut = () => { redacted.paused = (redacted.paused || 0) + 1; };
     const allow = (el, label) => {
       if (R.secretReason(el, label)) { redacted.secret++; return false; }
       if (!settings.captureEEO && R.isEEO(el, label)) { redacted.eeo++; return false; }
@@ -372,6 +457,7 @@
           const checked = members.filter(m => m.checked);
           const value = type === 'radio' ? (checked[0]?.value ?? null) : checked.map(m => m.value);
           const display = checked.map(optionLabel).join(', ');
+          if (members.some(m => touchedWhilePaused.has(m))) { if (display !== '') leftOut(); continue; }
           note(members, display);
           fields.push({ label, name, type: type === 'radio' ? 'radio' : 'checkbox-group', value, display });
           continue;
@@ -380,6 +466,7 @@
         // form filled in on its own: its display is always Yes or No.
         const label = labelFor(el, root);
         if (!allow(el, label)) continue;
+        if (touchedWhilePaused.has(el)) { leftOut(); continue; }
         fields.push({ label, name, type: 'checkbox', value: el.checked, display: el.checked ? 'Yes' : 'No' });
         continue;
       }
@@ -389,6 +476,7 @@
         // Rejected now (the EEO toggle may have changed since): forget
         // anything remembered for this input too.
         if (!allow(el, label)) { seenFiles.delete(fileKey(el, label)); continue; }
+        if (touchedWhilePaused.has(el)) { if (el.files?.length) leftOut(); continue; }
         if (el.files && el.files.length) rememberFiles(fileKey(el, label), label, el.files);
         continue;
       }
@@ -412,6 +500,7 @@
         redacted.secret++;
         continue;
       }
+      if (touchedWhilePaused.has(el)) { if (display !== '') leftOut(); continue; }
       if (isEdited && display !== '') userFilled = true;
       fields.push({ label, name, type, value, display });
     }
@@ -510,6 +599,7 @@
   function sendDraft() {
     clearTimeout(draftTimer);
     draftTimer = null;
+    if (paused()) return; // a draft still debouncing when the pause began
     const root = draftRoot && draftRoot.isConnected ? draftRoot : document;
     const snap = collect(root);
     if (isEmpty(snap)) return;
@@ -519,12 +609,16 @@
   function onEdit(e) {
     const t = e.target;
     if (!(t instanceof Element)) return;
+    if (paused()) { editedWhilePaused(t); return; }
     if (e.type === 'change' && t.matches('input[type="file"]')) {
       const label = labelFor(t, scopeOf(t));
       if (fileAllowed(t, label)) rememberFiles(fileKey(t, label), label, t.files || []);
       else seenFiles.delete(fileKey(t, label));
     }
     if (!isField(t)) return;
+    // The paused answer committing itself late, not a new one. (A file
+    // input's change is never late: it fires when the file is chosen.)
+    if (!t.matches('input[type="file"]') && stillPausedValue(editTarget(t))) return;
     markEdited(t);
     draftRoot = scopeOf(t);
     clearTimeout(draftTimer);
@@ -541,6 +635,9 @@
     if (!files || !files.length || !(e.target instanceof Element)) return;
     if (e.target.matches('input[type="file"]')) return; // its change event covers it
     const label = precedingText(e.target, document) || cleanLabel(textOf(e.target)).slice(0, 80) || 'Dropped file';
+    // Dropped while paused: not recorded, and an earlier file remembered
+    // for this zone is no longer the one it holds.
+    if (paused()) { seenFiles.delete(`drop:${label}`); return; }
     // Judged by the zone's own label and the section it sits in. Not by a
     // nearby file input: from a zone, the nearest one is as likely to be
     // the previous question's.
@@ -564,6 +661,10 @@
   function onClick(e) {
     const ctl = e.target instanceof Element && e.target.closest(SUBMIT_CONTROL_SEL);
     if (!ctl) return;
+    if (paused()) {
+      if (e.isTrusted && isSubmitControl(ctl)) submittedWhilePaused();
+      return;
+    }
     if (!isSubmitControl(ctl)) {
       // "Next" in a multi-step flow can replace the step's fields in its own
       // click handler. Capture runs first, so flush the debouncing draft now
@@ -612,6 +713,7 @@
     // or form.requestSubmit() from a script. Both are trusted events. A
     // dispatched `new Event('submit')` is not, and submits nothing.
     if (!e.isTrusted) return;
+    if (paused()) { submittedWhilePaused(); return; }
     const snap = collect(form);
     if (isEmpty(snap)) return;
     clearTimeout(draftTimer);

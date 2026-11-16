@@ -37,7 +37,8 @@ went into: a skipped file's name and hash are not stored.
 - In your browser's local extension storage (IndexedDB), on your device.
   Records, drafts included, stay there until you remove the extension.
   **Clear** in the popup removes the submissions already saved to disk.
-- Your settings (including when you clicked Start recording), in the
+- Your settings (including when you clicked Start recording, and when a
+  pause ends), in the
   extension's local storage, and a note of which open
   tab belongs to which record, in its session storage, which the browser
   empties when it closes.
@@ -61,6 +62,7 @@ server, no analytics, no tracking and no third-party code.
 | `storage` | Keep records and settings in the browser |
 | `scripting` | Start recording on a site you just added, without a reload |
 | `activeTab` | Show the current site's status in the popup |
+| `alarms` | End a pause on time and take the "off" badge off the toolbar icon |
 
 ## Deleting your data
 

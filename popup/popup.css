@@ -59,6 +59,13 @@ button {
 button:hover { border-color: var(--muted); }
 #site-toggle, #export { width: 100%; margin-top: 8px; }
 
+#pause { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+#pause[hidden] { display: none; }
+.pause-actions { display: flex; gap: 6px; }
+.pause-actions button { padding: 2px 8px; font-size: 12px; }
+#pause.paused #pause-state { color: var(--warn); font-weight: 600; font-size: 13px; }
+.state.paused { color: var(--warn); }
+
 .section-head { display: flex; align-items: baseline; justify-content: space-between; margin: 14px 0 6px; }
 .section-head h2 { margin: 0; }
 button.link {

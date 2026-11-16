@@ -6,6 +6,7 @@ import * as store from '../lib/store.js';
 import { writeRecord, writeExport } from '../lib/sink-downloads.js';
 import { isCovered, concreteOrigins } from '../lib/coverage.js';
 import { createSubmitGate, fingerprint } from '../lib/throttle.js';
+import { isPaused, untilText, RESUME_ALARM } from '../lib/pause.js';
 
 // If the page vanishes mid-submit (a native form navigating away), the
 // content script never gets to say whether the submit went through. Leaving
@@ -103,8 +104,12 @@ async function handle(msg, sender) {
       // is not a frame on a covered site (an extension page, say) too.
       if (!(await isCovered(sender.url, STATIC_MATCHES, isGranted))) return null;
       // Nothing is recorded, not even a draft, until "Start recording" on
-      // the welcome page. Read per snapshot, so it holds across restarts.
-      if (!(await hasConsent())) return null;
+      // the welcome page, or while paused. Read per snapshot, so both hold
+      // across restarts and a pause ends on the clock, not on its alarm.
+      // The content script goes quiet on its own while paused; this catches
+      // what was already in flight.
+      const settings = await readSettings();
+      if (!settings.consentedAt || isPaused(settings)) return null;
       const key = sessionKey(sender);
       if (msg.status === 'draft') return upsert(key, msg.snapshot, STATUS.DRAFT, msg.trigger);
       if (msg.status === 'submitted') {
@@ -144,9 +149,12 @@ async function handle(msg, sender) {
   }
 }
 
+async function readSettings() {
+  return (await chrome.storage.local.get('settings')).settings || {};
+}
+
 async function hasConsent() {
-  const { settings } = await chrome.storage.local.get('settings');
-  return !!settings?.consentedAt;
+  return !!(await readSettings()).consentedAt;
 }
 
 // One at a time: two snapshots for the same session must not interleave
@@ -245,3 +253,39 @@ chrome.runtime.onInstalled.addListener(({ reason }) => {
     }
   });
 });
+
+// ------------------------------------------------------------- pause
+
+// The toolbar says "off" for as long as a pause lasts, and an alarm puts it
+// back. Recording never waits on the alarm (see src/lib/pause.js): Chrome
+// may fire it late, or drop it across a browser restart, which is why this
+// also runs on startup and on every settings change.
+async function syncPause() {
+  const settings = await readSettings();
+  if (isPaused(settings)) {
+    const until = Number(settings.pausedUntil);
+    await chrome.alarms.create(RESUME_ALARM, { when: until });
+    await chrome.action.setBadgeBackgroundColor({ color: '#6e6e73' });
+    await chrome.action.setBadgeTextColor({ color: '#ffffff' });
+    await chrome.action.setBadgeText({ text: 'off' });
+    await chrome.action.setTitle({ title: `Carbon Copy: paused until ${untilText(until)}` });
+    return;
+  }
+  await chrome.alarms.clear(RESUME_ALARM);
+  await chrome.action.setBadgeText({ text: '' });
+  await chrome.action.setTitle({ title: 'Carbon Copy' });
+}
+
+chrome.alarms.onAlarm.addListener(({ name }) => {
+  if (name === RESUME_ALARM) enqueue(syncPause);
+});
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !changes.settings) return;
+  const was = changes.settings.oldValue?.pausedUntil;
+  const now = changes.settings.newValue?.pausedUntil;
+  if (was !== now) enqueue(syncPause);
+});
+chrome.runtime.onStartup.addListener(() => enqueue(syncPause));
+// Every time the worker starts: cheap, and it corrects a badge left behind
+// by an alarm that fired while the worker could not act on it.
+enqueue(syncPause);

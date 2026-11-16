@@ -3,6 +3,7 @@ import { heading } from '../src/lib/render-md.js';
 import { isSafelySaved } from '../src/lib/record.js';
 import { MATCHES, matchesPattern } from '../src/presets/jobs.js';
 import { concreteOrigins } from '../src/lib/coverage.js';
+import { isPaused, untilText, PAUSE_OPTIONS } from '../src/lib/pause.js';
 
 const $ = id => document.getElementById(id);
 
@@ -10,6 +11,12 @@ const $ = id => document.getElementById(id);
 // rather than the preset list: the test build adds localhost here.
 const STATIC_MATCHES = chrome.runtime.getManifest().content_scripts.flatMap(c => c.matches);
 const say = text => { $('msg').textContent = text; };
+
+const getSettings = async () => (await chrome.storage.local.get('settings')).settings || {};
+// Read, change, write: settings holds consentedAt and the EEO toggle too.
+async function updateSettings(change) {
+  await chrome.storage.local.set({ settings: change({ ...(await getSettings()) }) });
+}
 
 // ------------------------------------------------------------- this site
 
@@ -29,6 +36,12 @@ async function renderSite() {
   const btn = $('site-toggle');
   btn.hidden = true;
   state.className = 'state';
+  // A covered site while paused says so, not "recording".
+  const covered = text => {
+    const p = isPaused(settings);
+    state.textContent = p ? 'paused' : text;
+    state.classList.add(p ? 'paused' : 'on');
+  };
 
   if (!u || !/^https?:$/.test(u.protocol)) {
     host.textContent = 'This page';
@@ -38,8 +51,7 @@ async function renderSite() {
   host.textContent = u.hostname;
   const match = STATIC_MATCHES.find(p => matchesPattern(p, u.href));
   if (match) {
-    state.textContent = MATCHES.includes(match) ? 'recording (job sites)' : 'recording (test build)';
-    state.classList.add('on');
+    covered(MATCHES.includes(match) ? 'recording (job sites)' : 'recording (test build)');
     return;
   }
   if (u.protocol !== 'https:') {
@@ -52,8 +64,8 @@ async function renderSite() {
   // site, and Carbon Copy records on none of them through it.
   const concrete = async () => concreteOrigins((await chrome.permissions.getAll()).origins).includes(origin);
   const granted = await concrete();
-  state.textContent = granted ? 'recording' : 'not recording';
-  state.classList.toggle('on', granted);
+  if (granted) covered('recording');
+  else state.textContent = 'not recording';
   btn.hidden = false;
   btn.textContent = granted ? 'Stop recording this site' : 'Record this site';
   btn.onclick = async () => {
@@ -86,6 +98,47 @@ function renderNoConsent() {
     await chrome.tabs.create({ url: chrome.runtime.getURL('welcome/welcome.html') });
     window.close();
   };
+}
+
+// ------------------------------------------------------------- pause
+
+// Timed only: a pause always ends by itself (src/lib/pause.js has why). The
+// service worker owns the toolbar badge and the alarm; this only writes
+// pausedUntil.
+let pauseTimer = null;
+async function renderPause() {
+  const settings = await getSettings();
+  const section = $('pause');
+  section.hidden = !settings.consentedAt;
+  if (section.hidden) return;
+  const paused = isPaused(settings);
+  section.classList.toggle('paused', paused);
+  $('pause-state').textContent = paused ? `Paused until ${untilText(Number(settings.pausedUntil))}` : 'Pause recording';
+  $('resume').hidden = !paused;
+  [['pause-short', PAUSE_OPTIONS[0]], ['pause-long', PAUSE_OPTIONS[1]]].forEach(([id, opt]) => {
+    const b = $(id);
+    b.hidden = paused;
+    b.textContent = opt.label;
+    b.onclick = async () => {
+      const until = Date.now() + opt.ms;
+      await updateSettings(s => ({ ...s, pausedUntil: until }));
+      say(`Paused. Nothing is recorded until ${untilText(until)}; then recording resumes by itself.`);
+      renderAll();
+    };
+  });
+  $('resume').onclick = async () => {
+    await updateSettings(({ pausedUntil, ...s }) => s);
+    say('Recording again.');
+    renderAll();
+  };
+  // The pause can run out while the popup is open.
+  clearTimeout(pauseTimer);
+  if (paused) pauseTimer = setTimeout(renderAll, Number(settings.pausedUntil) - Date.now() + 100);
+}
+
+function renderAll() {
+  renderSite();
+  renderPause();
 }
 
 // ------------------------------------------------------------- records
@@ -176,8 +229,7 @@ async function renderSettings() {
   const { settings = {} } = await chrome.storage.local.get('settings');
   $('eeo').checked = !!settings.captureEEO;
   $('eeo').onchange = async e => {
-    const { settings: cur = {} } = await chrome.storage.local.get('settings');
-    await chrome.storage.local.set({ settings: { ...cur, captureEEO: e.target.checked } });
+    await updateSettings(s => ({ ...s, captureEEO: e.target.checked }));
     say(e.target.checked ? 'EEO answers will be recorded from now on.' : 'EEO answers will be skipped.');
   };
   $('export').onclick = async () => {
@@ -190,7 +242,7 @@ async function renderSettings() {
   };
 }
 
-renderSite();
+renderAll();
 renderRecords();
 renderSettings();
 setupClear();

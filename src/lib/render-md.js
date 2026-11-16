@@ -61,6 +61,7 @@ export function renderMarkdown(record) {
   const r = record.redacted || {};
   if (r.secret) notes.push(`${r.secret} sensitive field${r.secret === 1 ? '' : 's'} (passwords, card, bank and ID numbers, date of birth) never recorded`);
   if (r.eeo) notes.push(`${r.eeo} EEO self-ID field${r.eeo === 1 ? '' : 's'} skipped (off by default)`);
+  if (r.paused) notes.push(`${r.paused} field${r.paused === 1 ? '' : 's'} left out, last edited while Carbon Copy was paused`);
   lines.push('---', '', `Recorded by Carbon Copy.${notes.length ? ' ' + notes.join('; ') + '.' : ''}`, '');
   return lines.join('\n');
 }

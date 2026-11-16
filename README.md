@@ -127,6 +127,13 @@ recording this site** takes effect at once, in tabs already open on that site
 too. Setting Chrome's site access for Carbon Copy to "On all sites" does not
 make it record everywhere: it records only on sites added one at a time.
 
+**Pause** in the popup stops recording everywhere for 1 hour or 8 hours, then
+recording resumes by itself, so a forgotten pause cannot cost you the next real
+application. The toolbar icon reads "off" until then. While paused, Carbon Copy
+reads nothing from the page. An answer typed during a pause stays out of later
+records until you edit it again after resuming, and the record says how many
+answers were left out that way.
+
 ## Install
 
 Not on the Chrome Web Store yet.

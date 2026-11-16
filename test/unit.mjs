@@ -10,6 +10,7 @@ import { basename, slug, landedWhereAsked, fileCopy } from '../src/lib/sink-down
 import { mergeSteps, isSafelySaved, buildRecord, LIMITS } from '../src/lib/record.js';
 import { createSubmitGate, fingerprint } from '../src/lib/throttle.js';
 import { isCovered, concreteOrigins } from '../src/lib/coverage.js';
+import { isPaused, PAUSE_OPTIONS } from '../src/lib/pause.js';
 import { shippedFiles, buildZip } from '../scripts/package.mjs';
 import { posix } from 'node:path';
 
@@ -159,7 +160,23 @@ test('renderMarkdown', () => {
   assert.ok(md.includes('1 sensitive field (passwords, card, bank and ID numbers, date of birth) never recorded'));
   assert.ok(md.includes('4 EEO self-ID fields skipped'));
   assert.ok(!md.includes('*Step'), 'no step markers for a one-step form');
+  assert.ok(!md.includes('paused'), 'pause note on a record made without a pause');
   assert.equal(heading({ ...record, context: {} }), 'Apply "now"');
+  const pausedMd = renderMarkdown({ ...record, redacted: { ...record.redacted, paused: 2 } });
+  assert.ok(pausedMd.includes('2 fields left out, last edited while Carbon Copy was paused'));
+});
+
+test('isPaused: only a pausedUntil still ahead of the clock', () => {
+  const now = 1_800_000_000_000;
+  assert.equal(isPaused(undefined, now), false);
+  assert.equal(isPaused({}, now), false);
+  assert.equal(isPaused({ pausedUntil: now - 1 }, now), false, 'expired');
+  assert.equal(isPaused({ pausedUntil: now }, now), false, 'ends exactly on time');
+  assert.equal(isPaused({ pausedUntil: now + 1 }, now), true);
+  assert.equal(isPaused({ pausedUntil: 'nonsense' }, now), false);
+  // Timed only, and never longer than the popup's "until" text can say
+  // without a date.
+  assert.ok(PAUSE_OPTIONS.length > 0 && PAUSE_OPTIONS.every(o => o.ms > 0 && o.ms <= 12 * 3600e3));
 });
 
 test('slug and basename', () => {
