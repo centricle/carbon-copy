@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Carbon Copy",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Keeps a copy of what you submit in job applications and other web forms, as plain files on your own disk.",
   "homepage_url": "https://github.com/centricle/carbon-copy",
   "minimum_chrome_version": "120",
