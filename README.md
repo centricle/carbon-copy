@@ -136,7 +136,10 @@ answers were left out that way.
 
 ## Install
 
-Not on the Chrome Web Store yet.
+From the [Chrome Web Store](https://chromewebstore.google.com/detail/carbon-copy/mkllondepkjfidflompekfgheogcegam).
+Read the welcome page that opens and click **Start recording**.
+
+To run it from source instead:
 
 1. Clone this repo.
 2. Open `chrome://extensions` and turn on **Developer mode**.
